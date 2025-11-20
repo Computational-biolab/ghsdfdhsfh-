@@ -26,7 +26,6 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* Make the app a bit cleaner and tighter */
     .block-container {
         padding-top: 1.5rem;
         padding-bottom: 1.5rem;
@@ -35,24 +34,33 @@ st.markdown(
     h1, h2, h3 {
         font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
-    .hero-title {
-        font-size: 2.4rem;
-        font-weight: 800;
-        margin-bottom: 0.5rem;
+    .hero-wrapper {
+        text-align: center;
+        margin-bottom: 1.5rem;
     }
-    .hero-subtitle {
-        font-size: 1.1rem;
-        color: #555;
+    .hero-logo {
+        margin-bottom: 0.5rem;
     }
     .hero-badge {
         display: inline-block;
-        padding: 0.15rem 0.55rem;
+        padding: 0.2rem 0.7rem;
         border-radius: 999px;
         background: #EEF6FF;
         color: #1D4ED8;
         font-size: 0.75rem;
         font-weight: 600;
         margin-bottom: 0.4rem;
+    }
+    .hero-title {
+        font-size: 2.3rem;
+        font-weight: 800;
+        margin-bottom: 0.4rem;
+    }
+    .hero-subtitle {
+        font-size: 1.05rem;
+        color: #555;
+        max-width: 800px;
+        margin: 0 auto 0.8rem auto;
     }
     .small-muted {
         font-size: 0.85rem;
@@ -132,11 +140,6 @@ def build_default_args(outdir: str):
 
 # -------------------- Core pipeline functions --------------------
 def run_feature_extraction(pdb_paths: List[str]):
-    """
-    For each PDB file, call FR.process_one_pdb and collect:
-      - features DataFrame
-      - mapping PDB_ID -> cleaned PDB path ( *_clean.pdb )
-    """
     if FR is None or not hasattr(FR, "process_one_pdb"):
         raise RuntimeError(
             "Could not import Features_RNALig or missing process_one_pdb(). "
@@ -170,12 +173,6 @@ def run_feature_extraction(pdb_paths: List[str]):
 
 
 def predict_binding_affinity(df_features: pd.DataFrame):
-    """
-    Use RNALig model to predict binding affinity for each row.
-    Returns:
-      - df_pred_only (ID + prediction)
-      - df_combined (features + prediction)
-    """
     model, feat_names = load_model_bundle()
     if model is None:
         return None, None
@@ -215,8 +212,7 @@ def predict_binding_affinity(df_features: pd.DataFrame):
 
 
 # -------------------- Visualization helpers --------------------
-def show_3d_structure(pdb_path: str, width: int = 480, height: int = 380, spin: bool = False):
-    """Embed a 3D viewer for a PDB file using py3Dmol."""
+def show_3d_structure(pdb_path: str, width: int = 260, height: int = 260, spin: bool = False):
     try:
         with open(pdb_path, "r") as f:
             pdb_block = f.read()
@@ -233,14 +229,10 @@ def show_3d_structure(pdb_path: str, width: int = 480, height: int = 380, spin: 
         view.spin(True)
 
     html = view._make_html()
-    st.components.v1.html(html, height=height + 20)
+    st.components.v1.html(html, height=height + 10)
 
 
 def show_feature_panel(row: pd.Series, cleaned_path: Optional[str] = None):
-    """
-    Show: prediction card + feature table + bar chart (numeric features)
-    for a single complex.
-    """
     pdb_id = row.get("PDB_ID", "Unknown")
     pred = row.get("Predicted_binding_affinity_kcal_mol", None)
 
@@ -263,73 +255,85 @@ def show_feature_panel(row: pd.Series, cleaned_path: Optional[str] = None):
     with col_right:
         if cleaned_path is not None:
             st.markdown("**Cleaned complex (3D view)**")
-            show_3d_structure(cleaned_path)
+            show_3d_structure(cleaned_path, width=260, height=260, spin=False)
         else:
             st.info("No cleaned PDB found to display.")
 
 
 # -------------------- UI Sections --------------------
 def render_home():
-    """Homepage with logo + description + moving 3D RNA–ligand demo."""
-    col1, col2 = st.columns([1.6, 1.4])
+    """Centered logo + title + 4 synced demo complexes."""
+    # ---- hero (centered) ----
+    logo_path = None
+    for candidate in ["rnalig_logo.png", "RNALig_logo.png", "logo.png"]:
+        if os.path.exists(candidate):
+            logo_path = candidate
+            break
 
-    with col1:
-        # Logo if available
-        logo_path = None
-        for candidate in ["rnalig_logo.png", "RNALig_logo.png", "logo.png"]:
-            if os.path.exists(candidate):
-                logo_path = candidate
-                break
-        if logo_path:
-            st.image(logo_path, width=130)
+    st.markdown('<div class="hero-wrapper">', unsafe_allow_html=True)
 
-        st.markdown('<div class="hero-badge">AI-driven scoring for RNA–ligand complexes</div>', unsafe_allow_html=True)
-        st.markdown('<div class="hero-title">RNALig – RNA–Ligand Binding Affinity Pipeline</div>', unsafe_allow_html=True)
+    if logo_path:
         st.markdown(
-            '<div class="hero-subtitle">From raw RNA–ligand structures to interpretable binding affinity predictions, '
-            'with full feature visibility for every complex.</div>',
+            f'<div class="hero-logo"><img src="data:image/png;base64,{_image_to_base64(logo_path)}" '
+            f'style="width:140px;border-radius:999px;" /></div>',
             unsafe_allow_html=True,
         )
 
-        st.markdown("")
-        st.markdown(
-            """
-            **Key capabilities**
-            - Upload **PDB/mmCIF** files or a **ZIP** of complexes  
-            - Automatic **cleaning** and ligand pocket extraction  
-            - Rich **structural & physicochemical features** (SASA, contacts, H-bonds, electrostatics…)  
-            - Random Forest model for **binding affinity estimation**  
-            - Per-complex **feature tables, bar plots, and 3D views**
-            """
-        )
+    st.markdown(
+        '<div class="hero-badge">AI-driven scoring for RNA–ligand complexes</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="hero-title">RNALig – RNA–Ligand Binding Affinity Pipeline</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="hero-subtitle">'
+        'From raw RNA–ligand structures to interpretable binding affinity predictions, '
+        'with full feature visibility for every complex.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown("")
-        st.markdown("👉 Use the **“Run RNALig”** tab above to start a new analysis.")
+    # ---- short bullet list under hero ----
+    st.markdown(
+        """
+**Key capabilities**
 
-    with col2:
-        st.markdown("#### Demo RNA–ligand complex")
-        demo_pdb = None
-        if os.path.exists("demo_complex.pdb"):
-            demo_pdb = "demo_complex.pdb"
-        # you can ship a demo file named demo_complex.pdb with the app
-        if demo_pdb:
-            st.caption("Example complex (spinning 3D view)")
-            show_3d_structure(demo_pdb, width=420, height=360, spin=True)
-        else:
-            st.info(
-                "Place a demo RNA–ligand PDB here as `demo_complex.pdb` to show an animated example on the home page."
-            )
+- Upload **PDB/mmCIF** files or a **ZIP** of complexes  
+- Automatic **cleaning** and ligand pocket extraction  
+- Rich **structural & physicochemical features** (SASA, contacts, H-bonds, electrostatics…)  
+- Random Forest model for **binding affinity estimation**  
+- Per-complex **feature tables, bar plots, and 3D views**
+        """
+    )
 
-        st.markdown("")
-        st.markdown(
-            '<p class="small-muted">RNALig is intended for research use only. Predictions should be '
-            'interpreted alongside structural inspection and experimental data.</p>',
-            unsafe_allow_html=True,
-        )
+    st.markdown("👉 Use the **“Run RNALig”** tab above to start an analysis.")
+    st.markdown("---")
+
+    # ---- 4 demo viewers in sync ----
+    st.subheader("Demo RNA–ligand complexes")
+
+    demo_files = ["demo1.pdb", "demo2.pdb", "demo3.pdb", "demo4.pdb"]
+    cols = st.columns(4)
+
+    for i, (col, fname) in enumerate(zip(cols, demo_files)):
+        with col:
+            st.markdown(f"**Demo {i+1}**")
+            if os.path.exists(fname):
+                show_3d_structure(fname, width=260, height=260, spin=True)
+            else:
+                st.info(f"Place a demo PDB as `{fname}` to show it here.")
+
+    st.markdown(
+        '<p class="small-muted">RNALig is intended for research use only. Predictions should be '
+        'interpreted alongside structural inspection and experimental data.</p>',
+        unsafe_allow_html=True,
+    )
 
 
 def render_run_pipeline():
-    """The original full pipeline UI: upload → features → predictions + visualisation."""
     st.header("Run RNALig pipeline")
 
     if FR is None:
@@ -464,7 +468,6 @@ for each RNA–ligand complex you upload.
 
 
 def render_docs():
-    """Simple docs tab for users."""
     st.header("Quick usage guide")
 
     st.markdown(
@@ -472,28 +475,18 @@ def render_docs():
 ### 1. Prepare input structures
 
 - RNA–ligand complexes in **PDB** or **mmCIF** format  
-- Each file should contain:
-  - At least one RNA chain  
-  - One bound small-molecule ligand
-
-You can:
-- Upload **up to 5 structures** directly, or  
-- Upload a **ZIP** archive containing many PDB/mmCIF files.
-
----
+- Each file should contain at least one RNA chain and one bound small-molecule ligand.
 
 ### 2. Run the pipeline
 
 1. Go to the **“Run RNALig”** tab  
-2. Choose upload mode  
+2. Choose upload mode (individual files or ZIP)  
 3. Click **“Run full pipeline (features + prediction)”**  
 4. Wait while RNALig:
    - Cleans the complex  
    - Detects the ligand pocket  
    - Computes structural & physicochemical features  
    - Applies the trained Random Forest model  
-
----
 
 ### 3. Interpret the results
 
@@ -507,6 +500,14 @@ You can:
 > structural inspection and experimental data where available.
         """
     )
+
+
+# -------------------- helper to inline logo --------------------
+import base64
+
+def _image_to_base64(path: str) -> str:
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode("utf-8")
 
 
 # -------------------- Main --------------------
