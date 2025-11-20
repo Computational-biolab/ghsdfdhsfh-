@@ -1,5 +1,5 @@
 import streamlit as st
-import os, io, tempfile, zipfile
+import os, tempfile, zipfile
 from typing import List, Tuple, Optional
 
 import pandas as pd
@@ -17,7 +17,7 @@ else:
     _feature_import_error = None
 
 
-# -------------------- Page config + light custom CSS --------------------
+# -------------------- Page config + light CSS --------------------
 st.set_page_config(
     page_title="RNALig – RNA–Ligand Binding Affinity Pipeline",
     layout="wide",
@@ -29,17 +29,10 @@ st.markdown(
     .block-container {
         padding-top: 1.5rem;
         padding-bottom: 1.5rem;
-        max-width: 1200px;
+        max-width: 1000px;
     }
     h1, h2, h3 {
         font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    .hero-wrapper {
-        text-align: center;
-        margin-bottom: 1.5rem;
-    }
-    .hero-logo {
-        margin-bottom: 0.5rem;
     }
     .hero-badge {
         display: inline-block;
@@ -49,17 +42,18 @@ st.markdown(
         color: #1D4ED8;
         font-size: 0.75rem;
         font-weight: 600;
+        margin-top: 0.6rem;
         margin-bottom: 0.4rem;
     }
     .hero-title {
         font-size: 2.3rem;
         font-weight: 800;
-        margin-bottom: 0.4rem;
+        margin-bottom: 0.35rem;
     }
     .hero-subtitle {
-        font-size: 1.05rem;
+        font-size: 1.0rem;
         color: #555;
-        max-width: 800px;
+        max-width: 720px;
         margin: 0 auto 0.8rem auto;
     }
     .small-muted {
@@ -212,7 +206,7 @@ def predict_binding_affinity(df_features: pd.DataFrame):
 
 
 # -------------------- Visualization helpers --------------------
-def show_3d_structure(pdb_path: str, width: int = 260, height: int = 260, spin: bool = False):
+def show_3d_structure(pdb_path: str, width: int = 450, height: int = 350, spin: bool = False):
     try:
         with open(pdb_path, "r") as f:
             pdb_block = f.read()
@@ -229,7 +223,7 @@ def show_3d_structure(pdb_path: str, width: int = 260, height: int = 260, spin: 
         view.spin(True)
 
     html = view._make_html()
-    st.components.v1.html(html, height=height + 10)
+    st.components.v1.html(html, height=height + 15)
 
 
 def show_feature_panel(row: pd.Series, cleaned_path: Optional[str] = None):
@@ -255,48 +249,52 @@ def show_feature_panel(row: pd.Series, cleaned_path: Optional[str] = None):
     with col_right:
         if cleaned_path is not None:
             st.markdown("**Cleaned complex (3D view)**")
-            show_3d_structure(cleaned_path, width=260, height=260, spin=False)
+            show_3d_structure(cleaned_path, width=320, height=260, spin=False)
         else:
             st.info("No cleaned PDB found to display.")
 
 
-# -------------------- UI Sections --------------------
+# -------------------- Home tab --------------------
+def find_demo_pdbs() -> List[str]:
+    """Return a sorted list of demo*.pdb files in the current folder."""
+    demos = []
+    for fname in os.listdir("."):
+        if fname.lower().endswith(".pdb") and fname.lower().startswith("demo"):
+            demos.append(fname)
+    demos.sort()
+    return demos
+
+
 def render_home():
-    """Centered logo + title + 4 synced demo complexes."""
-    # ---- hero (centered) ----
-    logo_path = None
-    for candidate in ["rnalig_logo.png", "RNALig_logo.png", "logo.png"]:
-        if os.path.exists(candidate):
-            logo_path = candidate
-            break
+    # center everything by using middle column
+    left, center, right = st.columns([1, 2, 1])
+    with center:
+        # logo
+        logo_path = None
+        for candidate in ["rnalig_logo.png", "RNALig_logo.png", "logo.png"]:
+            if os.path.exists(candidate):
+                logo_path = candidate
+                break
+        if logo_path:
+            st.image(logo_path, width=140)
 
-    st.markdown('<div class="hero-wrapper">', unsafe_allow_html=True)
-
-    if logo_path:
         st.markdown(
-            f'<div class="hero-logo"><img src="data:image/png;base64,{_image_to_base64(logo_path)}" '
-            f'style="width:140px;border-radius:999px;" /></div>',
+            '<div class="hero-badge">AI-driven scoring for RNA–ligand complexes</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            '<div class="hero-title">RNALig – RNA–Ligand Binding Affinity Pipeline</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            '<div class="hero-subtitle">'
+            'From raw RNA–ligand structures to interpretable binding affinity predictions, '
+            'with full feature visibility for every complex.'
+            '</div>',
             unsafe_allow_html=True,
         )
 
-    st.markdown(
-        '<div class="hero-badge">AI-driven scoring for RNA–ligand complexes</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '<div class="hero-title">RNALig – RNA–Ligand Binding Affinity Pipeline</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '<div class="hero-subtitle">'
-        'From raw RNA–ligand structures to interpretable binding affinity predictions, '
-        'with full feature visibility for every complex.'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # ---- short bullet list under hero ----
+    st.markdown("")
     st.markdown(
         """
 **Key capabilities**
@@ -308,23 +306,27 @@ def render_home():
 - Per-complex **feature tables, bar plots, and 3D views**
         """
     )
-
     st.markdown("👉 Use the **“Run RNALig”** tab above to start an analysis.")
     st.markdown("---")
 
-    # ---- 4 demo viewers in sync ----
+    # Demo viewer – one-by-one
     st.subheader("Demo RNA–ligand complexes")
 
-    demo_files = ["demo1.pdb", "demo2.pdb", "demo3.pdb", "demo4.pdb"]
-    cols = st.columns(4)
-
-    for i, (col, fname) in enumerate(zip(cols, demo_files)):
-        with col:
-            st.markdown(f"**Demo {i+1}**")
-            if os.path.exists(fname):
-                show_3d_structure(fname, width=260, height=260, spin=True)
-            else:
-                st.info(f"Place a demo PDB as `{fname}` to show it here.")
+    demo_files = find_demo_pdbs()
+    if not demo_files:
+        st.info(
+            "Place one or more demo PDB files in this folder with names like "
+            "`demo1.pdb`, `demo2.pdb`, ... to show them here."
+        )
+    else:
+        # choose one demo at a time
+        label_map = {f: f.replace(".pdb", "") for f in demo_files}
+        selected = st.selectbox(
+            "Select a demo complex to view:",
+            options=demo_files,
+            format_func=lambda x: label_map.get(x, x),
+        )
+        show_3d_structure(selected, spin=True)
 
     st.markdown(
         '<p class="small-muted">RNALig is intended for research use only. Predictions should be '
@@ -333,6 +335,7 @@ def render_home():
     )
 
 
+# -------------------- Run pipeline tab --------------------
 def render_run_pipeline():
     st.header("Run RNALig pipeline")
 
@@ -467,6 +470,7 @@ for each RNA–ligand complex you upload.
                 show_feature_panel(row, cleaned_path=clean_path)
 
 
+# -------------------- Docs tab --------------------
 def render_docs():
     st.header("Quick usage guide")
 
@@ -482,11 +486,11 @@ def render_docs():
 1. Go to the **“Run RNALig”** tab  
 2. Choose upload mode (individual files or ZIP)  
 3. Click **“Run full pipeline (features + prediction)”**  
-4. Wait while RNALig:
-   - Cleans the complex  
-   - Detects the ligand pocket  
-   - Computes structural & physicochemical features  
-   - Applies the trained Random Forest model  
+4. RNALig will:
+   - Clean the complex  
+   - Detect the ligand pocket  
+   - Compute structural & physicochemical features  
+   - Apply the trained Random Forest model  
 
 ### 3. Interpret the results
 
@@ -500,14 +504,6 @@ def render_docs():
 > structural inspection and experimental data where available.
         """
     )
-
-
-# -------------------- helper to inline logo --------------------
-import base64
-
-def _image_to_base64(path: str) -> str:
-    with open(path, "rb") as f:
-        return base64.b64encode(f.read()).decode("utf-8")
 
 
 # -------------------- Main --------------------
