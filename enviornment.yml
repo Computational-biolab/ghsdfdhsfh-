@@ -1,29 +1,20 @@
-name: rnalig-env
+name: rnalig
 channels:
   - conda-forge
   - bioconda
-  - defaults
 dependencies:
   - python=3.10
-  - pip
-  - pip-tools
-  - streamlit
-  - pandas
-  - numpy
-  - scipy
-  - joblib
-  - requests
-  - biopython
-  - py3Dmol
-  - pubchempy
-  - mdanalysis
-  - matplotlib
-  - seaborn
-  - networkx
-  - scikit-learn
   - rdkit
   - freesasa
   - viennarna
+  - openbabel
+  - mdanalysis
+  - pip
   - pip:
-      # pip-only fallbacks (if needed)
+      - streamlit
+      - biopython
+      - pandas
+      - numpy
+      - scikit-learn
+      - joblib
       - py3Dmol
