@@ -1,28 +1,27 @@
-# Base miniconda image
+# Use a base image that includes Miniconda
 FROM continuumio/miniconda3
 
-# Set working directory
+# Set working directory inside the container
 WORKDIR /app
 
-# Copy environment file
+# Copy the conda environment file into the image
 COPY environment.yml /app/environment.yml
 
-# Create conda environment
+# Create the conda environment defined in environment.yml
 RUN conda env create -f environment.yml
 
-# Activate environment by default
+# Use bash as default shell
 SHELL ["bash", "-c"]
-RUN echo "conda activate rnalig" >> ~/.bashrc
+
+# Put the rnalig environment on PATH so we don't need `conda activate`
 ENV PATH /opt/conda/envs/rnalig/bin:$PATH
 
-# Copy all project files into container
+# Copy all project files into the image
 COPY . /app
 
-# Render sets $PORT automatically — we must respect it
-ENV PORT 10000
-
-# Expose port (optional)
+# Render sets $PORT automatically; fall back to 10000 if not set
+ENV PORT=10000
 EXPOSE 10000
 
-# Start Streamlit inside the conda environment
-CMD ["bash", "-c", "conda activate rnalig && streamlit run app.py --server.port=$PORT --server.address=0.0.0.0"]
+# Start the Streamlit app (NO `conda activate` here)
+CMD ["bash", "-c", "streamlit run app.py --server.port=$PORT --server.address=0.0.0.0"]
