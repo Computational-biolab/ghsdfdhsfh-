@@ -1,0 +1,18 @@
+# Core GUI and data
+streamlit>=1.18
+pandas
+numpy
+scipy
+joblib
+requests
+biopython
+py3Dmol
+pubchempy
+MDAnalysis
+matplotlib
+seaborn
+scikit-learn==1.6.1
+networkx
+viennaRNA
+# Optional: smaller pure-python helpers
+tqdm
