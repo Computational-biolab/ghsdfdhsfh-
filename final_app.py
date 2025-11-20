@@ -199,8 +199,8 @@ def predict_binding_affinity(df_features: pd.DataFrame):
 # ------------------- Streamlit UI -------------------
 
 def main():
-    st.set_page_config(page_title="RNALig Docker — End-to-End", layout="wide")
-    st.title("🧬 RNALig Docker — RNA–Ligand Binding Affinity Pipeline")
+    st.set_page_config(page_title="RNALig: AI-driven structure based binding affinity predictor", layout="wide")
+    st.title("🧬 RNALig: RNA–Ligand Binding Affinity Predictor")
 
     st.markdown(
         """
@@ -364,3 +364,4 @@ This app performs the **full pipeline in one go**:
 
 if __name__ == "__main__":
     main()
+
