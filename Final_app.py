@@ -25,10 +25,15 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+    /* Light grey app background like a webserver */
+    .main {
+        background-color: #f4f6fb;
+    }
+
     .block-container {
         padding-top: 1.5rem;
         padding-bottom: 1.5rem;
-        max-width: 1000px;
+        max-width: 1100px;
     }
 
     /* Center and space the tab bar */
@@ -46,6 +51,12 @@ st.markdown(
         font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont,
                      "Segoe UI", sans-serif;
     }
+    p {
+        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+                     "Segoe UI", sans-serif;
+        font-size: 0.96rem;
+    }
+
     .hero-badge {
         display: inline-block;
         padding: 0.2rem 0.7rem;
@@ -62,12 +73,6 @@ st.markdown(
         font-weight: 800;
         margin-bottom: 0.35rem;
     }
-    .hero-subtitle {
-        font-size: 1.0rem;
-        color: #555;
-        max-width: 720px;
-        margin: 0 auto 0.8rem auto;
-    }
     .small-muted {
         font-size: 0.85rem;
         color: #777;
@@ -76,6 +81,23 @@ st.markdown(
         text-align: center;
         margin-top: 10px;
         margin-bottom: 10px;
+    }
+
+    /* Main white card for content (like RSAPred panel) */
+    .content-card {
+        background: #ffffff;
+        border-radius: 18px;
+        padding: 2.2rem 3rem 2.4rem 3rem;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.10);
+        margin-bottom: 1.5rem;
+    }
+
+    /* Right-side movie viewer card */
+    .movie-card {
+        background: #f9fafb;
+        border-radius: 16px;
+        padding: 0.8rem 0.8rem 0.2rem 0.8rem;
+        box-shadow: 0 4px 16px rgba(15, 23, 42, 0.10);
     }
     </style>
     """,
@@ -219,7 +241,7 @@ def predict_binding_affinity(df_features: pd.DataFrame):
     return df_pred, df_combined
 
 # -------------------- 3D viewer helpers --------------------
-def show_3d_structure(pdb_str: str, width: int = 450, height: int = 350, spin: bool = False):
+def show_3d_structure(pdb_str: str, width: int = 430, height: int = 320, spin: bool = False):
     """Render a PDB string with py3Dmol."""
     view = py3Dmol.view(width=width, height=height)
     view.addModel(pdb_str, "pdb")
@@ -275,6 +297,9 @@ def find_demo_pdbs() -> List[str]:
 
 # -------------------- Home tab --------------------
 def render_home():
+    # Wrap everything in a white card
+    st.markdown('<div class="content-card">', unsafe_allow_html=True)
+
     # Top: logo centered, title below it
     logo_path = None
     for candidate in ["rnalig_logo.png", "RNALig_logo.png", "logo.png"]:
@@ -317,11 +342,11 @@ def render_home():
         )
         st.markdown("")
         st.markdown(
-            " Use the **“Run RNALig”** tab to upload your own complexes and run the full pipeline."
+            "👉 Use the **“Run Predictions”** tab to upload your own complexes "
+            "and run the full pipeline."
         )
 
     with col_demo:
-        # Only structures movie – auto movable, no heading text
         demo_files = find_demo_pdbs()
         if not demo_files:
             st.info(
@@ -329,8 +354,10 @@ def render_home():
                 "`demo1.pdb`, `demo2.pdb`, ... to show an animated example here."
             )
         else:
+            st.markdown('<div class="movie-card">', unsafe_allow_html=True)
             placeholder = st.empty()
-            # autoplay through all demos once
+
+            # autoplay through all demos once, then keep last one
             for fname in demo_files:
                 try:
                     with open(fname, "r") as f:
@@ -339,8 +366,8 @@ def render_home():
                     continue
                 with placeholder.container():
                     show_3d_structure(pdb_block, spin=True)
-                time.sleep(1.5)
-            # after looping, keep last structure visible
+                time.sleep(1.0)
+
             try:
                 with open(demo_files[-1], "r") as f:
                     pdb_last = f.read()
@@ -349,15 +376,20 @@ def render_home():
             except Exception:
                 pass
 
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)  # close content-card
+
     st.markdown(
-        '<p class="small-muted">RNALig is intended for research use only. Predictions should be '
-        'interpreted alongside structural inspection and experimental data.</p>',
+        '<p class="small-muted">RNALig is intended for research use only. '
+        'Predictions should be interpreted alongside structural inspection '
+        'and experimental data.</p>',
         unsafe_allow_html=True,
     )
 
-# -------------------- Run RNALig tab --------------------
+# -------------------- Run Predictions tab --------------------
 def render_run_pipeline():
-    st.header("Run RNALig pipeline")
+    st.header("Run Predictions")
 
     if FR is None:
         st.error(
@@ -442,7 +474,7 @@ for each RNA–ligand complex you upload.
                 st.error(f"❌ Feature extraction failed: {e}")
                 return
 
-        st.success(f" Extracted features for {len(df_features)} structure(s).")
+        st.success(f"✅ Extracted features for {len(df_features)} structure(s).")
 
         with st.spinner("Predicting binding affinities..."):
             df_pred, df_combined = predict_binding_affinity(df_features)
@@ -454,7 +486,7 @@ for each RNA–ligand complex you upload.
         st.markdown("**All predictions**")
         st.dataframe(df_pred, use_container_width=True)
 
-        st.markdown("#### Download results")
+        st.markdown("#### 📥 Download results")
         st.download_button(
             "Download all features (CSV)",
             data=df_features.to_csv(index=False).encode("utf-8"),
@@ -480,18 +512,18 @@ for each RNA–ligand complex you upload.
             if id_col:
                 pdb_id = row[id_col]
                 clean_path = cleaned_map.get(pdb_id)
-                label = f" {pdb_id}"
+                label = f"📁 {pdb_id}"
             else:
                 pdb_id = f"row_{idx}"
                 clean_path = None
-                label = f" Complex {idx}"
+                label = f"📁 Complex {idx}"
 
             with st.expander(label, expanded=False):
                 show_feature_panel(row, cleaned_path=clean_path)
 
-# -------------------- Docs tab --------------------
-def render_docs():
-    st.header("Quick usage guide")
+# -------------------- Tutorial tab --------------------
+def render_tutorial():
+    st.header("Tutorial")
 
     st.markdown(
         """
@@ -502,7 +534,7 @@ def render_docs():
 
 ### 2. Run the pipeline
 
-1. Go to the **“Run RNALig”** tab  
+1. Go to the **“Run Predictions”** tab  
 2. Choose upload mode (individual files or ZIP)  
 3. Click **“Run full pipeline (features + prediction)”**  
 4. RNALig will:
@@ -526,7 +558,7 @@ def render_docs():
 
 # -------------------- Main --------------------
 def main():
-    tabs = st.tabs([" Home", " Run Predictions", "📖 Tutorial"])
+    tabs = st.tabs(["🏠 Home", "📊 Run Predictions", "📖 Tutorial"])
 
     with tabs[0]:
         render_home()
@@ -535,7 +567,7 @@ def main():
         render_run_pipeline()
 
     with tabs[2]:
-        render_docs()
+        render_tutorial()
 
 
 if __name__ == "__main__":
