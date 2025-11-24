@@ -112,10 +112,10 @@ def load_model_bundle() -> Tuple[Optional[object], Optional[List[str]]]:
         with open("RNALig_training_model.pkl", "rb") as f:
             bundle = joblib.load(f)
     except FileNotFoundError:
-        st.error("❌ Model file `RNALig_training_model.pkl` not found in this folder.")
+        st.error(" Model file `RNALig_training_model.pkl` not found in this folder.")
         return None, None
     except Exception as e:
-        st.error(f"❌ Failed to load model bundle: {e}")
+        st.error(f" Failed to load model bundle: {e}")
         return None, None
 
     if isinstance(bundle, dict) and "model" in bundle:
@@ -334,8 +334,8 @@ def render_home_content():
             "binding affinities directly from 3D complexes. It automatically "
             "cleans raw PDB/mmCIF files, standardises ligands and detects the "
             "RNA binding pocket. A rich set of structural and physicochemical "
-            "descriptors—including SASA, non-covalent contacts, hydrogen bonds, "
-            "stacking interactions and electrostatics—is extracted for each "
+            "descriptors, including SASA, non-covalent contacts, hydrogen bonds, "
+            "stacking interactions and electrostatics, is extracted for each "
             "complex. These features are fed into a trained Random Forest model "
             "to predict binding affinity in kcal/mol. The interface is designed "
             "as an end-to-end pipeline that exposes both the feature table and "
@@ -344,7 +344,7 @@ def render_home_content():
         )
         st.markdown("")
         st.markdown(
-            "👉 Use the **“Run Predictions”** page to upload your own complexes "
+            " Use the **“Run Predictions”** page to upload your own complexes "
             "and run the full pipeline."
         )
 
@@ -465,7 +465,7 @@ for each RNA–ligand complex you upload.
             else:
                 st.error("No .pdb/.cif/.mmcif files found in the ZIP.")
 
-    if st.button("🚀 Run full pipeline (features + prediction)", type="primary"):
+    if st.button(" Run full pipeline (features + prediction)", type="primary"):
         if not pdb_paths:
             st.error("No structures to process. Please upload files or a ZIP first.")
             st.markdown('</div>', unsafe_allow_html=True)
@@ -475,16 +475,16 @@ for each RNA–ligand complex you upload.
             try:
                 df_features, cleaned_map = run_feature_extraction(pdb_paths)
             except Exception as e:
-                st.error(f"❌ Feature extraction failed: {e}")
+                st.error(f" Feature extraction failed: {e}")
                 st.markdown('</div>', unsafe_allow_html=True)
                 return
 
-        st.success(f"✅ Extracted features for {len(df_features)} structure(s).")
+        st.success(f" Extracted features for {len(df_features)} structure(s).")
 
         with st.spinner("Predicting binding affinities..."):
             df_pred, df_combined = predict_binding_affinity(df_features)
         if df_pred is None:
-            st.error("❌ Prediction step failed due to model issues.")
+            st.error(" Prediction step failed due to model issues.")
             st.markdown('</div>', unsafe_allow_html=True)
             return
 
@@ -492,7 +492,7 @@ for each RNA–ligand complex you upload.
         st.markdown("**All predictions**")
         st.dataframe(df_pred, use_container_width=True)
 
-        st.markdown("#### 📥 Download results")
+        st.markdown("####  Download results")
         st.download_button(
             "Download all features (CSV)",
             data=df_features.to_csv(index=False).encode("utf-8"),
@@ -518,11 +518,11 @@ for each RNA–ligand complex you upload.
             if id_col:
                 pdb_id = row[id_col]
                 clean_path = cleaned_map.get(pdb_id)
-                label = f"📁 {pdb_id}"
+                label = f" {pdb_id}"
             else:
                 pdb_id = f"row_{idx}"
                 clean_path = None
-                label = f"📁 Complex {idx}"
+                label = f" Complex {idx}"
 
             with st.expander(label, expanded=False):
                 show_feature_panel(row, cleaned_path=clean_path)
