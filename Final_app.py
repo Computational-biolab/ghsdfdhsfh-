@@ -31,7 +31,7 @@ st.markdown(
     }
 
     .block-container {
-        padding-top: 1.5rem;
+        padding-top: 2rem !important;
         padding-bottom: 1.5rem;
         max-width: 1100px;
     }
@@ -79,8 +79,24 @@ st.markdown(
     }
     .hero-center {
         text-align: center;
-        margin-top: 10px;
+        margin-top: 5px;
         margin-bottom: 10px;
+    }
+
+    /* Absolutely center the logo */
+    .center-logo {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        margin-top: 5px;
+        margin-bottom: 0px;
+        padding: 0;
+    }
+    .center-logo img {
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
     }
 
     /* Main white card for content (like RSAPred panel) */
@@ -188,6 +204,7 @@ def run_feature_extraction(pdb_paths: List[str]):
         row = FR.process_one_pdb(path, args)
         rows.append(row)
 
+    #     PDB_ID inside row should correspond to original name
         pdb_id = row.get("PDB_ID", os.path.splitext(base)[0])
         clean_name = os.path.splitext(base)[0] + "_clean.pdb"
         clean_path = os.path.join(outdir, clean_name)
@@ -300,18 +317,19 @@ def render_home():
     # Wrap everything in a white card
     st.markdown('<div class="content-card">', unsafe_allow_html=True)
 
-    # Top: logo centered, title below it
+    # Top: logo perfectly centered, title below it
     logo_path = None
     for candidate in ["rnalig_logo.png", "RNALig_logo.png", "logo.png"]:
         if os.path.exists(candidate):
             logo_path = candidate
             break
 
-    st.markdown('<div class="hero-center">', unsafe_allow_html=True)
-
     if logo_path:
-        st.image(logo_path, width=150)
+        st.markdown('<div class="center-logo">', unsafe_allow_html=True)
+        st.image(logo_path, width=160)
+        st.markdown('</div>', unsafe_allow_html=True)
 
+    st.markdown('<div class="hero-center">', unsafe_allow_html=True)
     st.markdown(
         '<div class="hero-badge">AI-driven scoring for RNA–ligand complexes</div>',
         unsafe_allow_html=True,
