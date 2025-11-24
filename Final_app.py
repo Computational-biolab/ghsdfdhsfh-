@@ -30,24 +30,13 @@ st.markdown(
         background-color: #f4f6fb;
     }
 
-    /* Make the content stretch across the whole screen */
+    /* Make the content use almost full width */
     .block-container {
-        padding-top: 2rem !important;
-        padding-bottom: 1.5rem;
+        max-width: 95% !important;
+        padding-top: 1.0rem !important;
         padding-left: 2rem;
         padding-right: 2rem;
-        max-width: 100% !important;
-    }
-
-    /* Center and space the tab bar */
-    .stTabs [data-baseweb="tab-list"] {
-        justify-content: center;
-        margin-top: 10px !important;
-        margin-bottom: 20px !important;
-    }
-    .stTabs [data-baseweb="tab"] {
-        font-size: 0.95rem;
-        font-weight: 600;
+        padding-bottom: 1.5rem;
     }
 
     h1, h2, h3 {
@@ -60,53 +49,70 @@ st.markdown(
         font-size: 0.96rem;
     }
 
-    .hero-badge {
-        display: inline-block;
-        padding: 0.2rem 0.7rem;
-        border-radius: 999px;
-        background: #EEF6FF;
-        color: #1D4ED8;
-        font-size: 0.75rem;
-        font-weight: 600;
-        margin-top: 0.6rem;
-        margin-bottom: 0.4rem;
-    }
-    .hero-title {
-        font-size: 2.3rem;
-        font-weight: 800;
-        margin-bottom: 0.35rem;
-    }
     .small-muted {
         font-size: 0.85rem;
         color: #777;
     }
-    .hero-center {
-        text-align: center;
-        margin-top: 5px;
-        margin-bottom: 10px;
-    }
 
-    /* Absolutely center the logo */
-    .center-logo {
-        display: flex;
-        justify-content: center;
-        align-items: center;
+    /* HEADER BAR */
+    .header-bar {
         width: 100%;
-        margin-top: 5px;
-        margin-bottom: 0px;
-        padding: 0;
-    }
-    .center-logo img {
-        display: block;
-        margin-left: auto;
-        margin-right: auto;
+        display: flex;
+        align-items: center;
+        padding: 10px 16px;
+        background: #ffffff;
+        border-bottom: 1px solid #e5e7eb;
+        box-shadow: 0 4px 10px rgba(15, 23, 42, 0.05);
+        margin-bottom: 10px;
+        border-radius: 0 0 16px 16px;
     }
 
-    /* Main white card for content – now full-width */
+    .header-logo {
+        height: 70px;
+        margin-right: 16px;
+    }
+
+    .header-title {
+        font-size: 28px;
+        font-weight: 800;
+        font-family: 'Inter', sans-serif;
+        color: #1f2933;
+        margin-bottom: 2px;
+    }
+
+    .header-subtitle {
+        font-size: 14px;
+        color: #6b7280;
+    }
+
+    /* NAVBAR (under header) */
+    .top-nav {
+        display: flex;
+        gap: 8px;
+        margin: 12px 0 16px 0;
+    }
+
+    .nav-pill {
+        padding: 4px 14px;
+        border-radius: 999px;
+        border: 1px solid #e5e7eb;
+        background: #f9fafb;
+        font-size: 0.9rem;
+        color: #4b5563;
+        font-family: 'Inter', sans-serif;
+    }
+
+    .nav-pill-active {
+        background: #ef4444;
+        border-color: #ef4444;
+        color: #ffffff;
+    }
+
+    /* Main white card for page content */
     .content-card {
         background: #ffffff;
         border-radius: 18px;
-        padding: 2.2rem 3rem 2.4rem 3rem;
+        padding: 2.0rem 2.5rem 2.4rem 2.5rem;
         box-shadow: 0 8px 24px rgba(15, 23, 42, 0.10);
         margin: 0 auto 1.5rem auto;
         width: 100%;
@@ -315,35 +321,56 @@ def find_demo_pdbs() -> List[str]:
     demos.sort()
     return demos
 
-# -------------------- Home tab --------------------
-def render_home():
-    # Wrap everything in a white card
-    st.markdown('<div class="content-card">', unsafe_allow_html=True)
-
-    # Top: logo perfectly centered, title below it
+# -------------------- Header & Navbar --------------------
+def render_header(current_page: str):
+    # Try common logo names
     logo_path = None
     for candidate in ["rnalig_logo.png", "RNALig_logo.png", "logo.png"]:
         if os.path.exists(candidate):
             logo_path = candidate
             break
 
+    # Header bar
+    st.markdown('<div class="header-bar">', unsafe_allow_html=True)
+
+    # Logo on the left
     if logo_path:
-        st.markdown('<div class="center-logo">', unsafe_allow_html=True)
-        st.image(logo_path, width=160)
-        st.markdown('</div>', unsafe_allow_html=True)
+        # Use markdown with <img> so CSS class applies
+        st.markdown(f'<img src="{logo_path}" class="header-logo">', unsafe_allow_html=True)
+    else:
+        st.write("RNALig")
 
-    st.markdown('<div class="hero-center">', unsafe_allow_html=True)
+    # Title + subtitle
     st.markdown(
-        '<div class="hero-badge">AI-driven scoring for RNA–ligand complexes</div>',
+        """
+        <div>
+            <div class="header-title">RNALig – RNA–Ligand Binding Affinity Pipeline</div>
+            <div class="header-subtitle">AI-driven scoring & interpretability for RNA–ligand complexes</div>
+        </div>
+        """,
         unsafe_allow_html=True,
     )
-    st.markdown(
-        '<div class="hero-title">RNALig – RNA–Ligand Binding Affinity Pipeline</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
 
-    # Overview text and demo movie side-by-side
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # Navbar just under the header
+    def pill(label: str, page_name: str) -> str:
+        active = "nav-pill nav-pill-active" if current_page == page_name else "nav-pill"
+        return f'<span class="{active}">{label}</span>'
+
+    nav_html = (
+        '<div class="top-nav">'
+        f'{pill("Home", "Home")}'
+        f'{pill("Run Predictions", "Run Predictions")}'
+        f'{pill("Tutorial", "Tutorial")}'
+        "</div>"
+    )
+    st.markdown(nav_html, unsafe_allow_html=True)
+
+# -------------------- Page contents --------------------
+def render_home_content():
+    st.markdown('<div class="content-card">', unsafe_allow_html=True)
+
     st.markdown("### Overview")
     col_text, col_demo = st.columns([2, 1.4])
 
@@ -363,7 +390,7 @@ def render_home():
         )
         st.markdown("")
         st.markdown(
-            "👉 Use the **“Run Predictions”** tab to upload your own complexes "
+            "👉 Use the **“Run Predictions”** page to upload your own complexes "
             "and run the full pipeline."
         )
 
@@ -399,7 +426,7 @@ def render_home():
 
             st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('</div>', unsafe_allow_html=True)  # close content-card
+    st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown(
         '<p class="small-muted">RNALig is intended for research use only. '
@@ -408,8 +435,8 @@ def render_home():
         unsafe_allow_html=True,
     )
 
-# -------------------- Run Predictions tab --------------------
 def render_run_pipeline():
+    st.markdown('<div class="content-card">', unsafe_allow_html=True)
     st.header("Run Predictions")
 
     if FR is None:
@@ -421,11 +448,12 @@ def render_run_pipeline():
         if _feature_import_error:
             with st.expander("Import error details"):
                 st.code(_feature_import_error)
+        st.markdown('</div>', unsafe_allow_html=True)
         return
 
     st.markdown(
         """
-This tab performs the full **clean → feature extraction → prediction** workflow
+This page performs the full **clean → feature extraction → prediction** workflow
 for each RNA–ligand complex you upload.
         """
     )
@@ -486,6 +514,7 @@ for each RNA–ligand complex you upload.
     if st.button("🚀 Run full pipeline (features + prediction)", type="primary"):
         if not pdb_paths:
             st.error("No structures to process. Please upload files or a ZIP first.")
+            st.markdown('</div>', unsafe_allow_html=True)
             return
 
         with st.spinner("Running feature extraction for all structures..."):
@@ -493,6 +522,7 @@ for each RNA–ligand complex you upload.
                 df_features, cleaned_map = run_feature_extraction(pdb_paths)
             except Exception as e:
                 st.error(f"❌ Feature extraction failed: {e}")
+                st.markdown('</div>', unsafe_allow_html=True)
                 return
 
         st.success(f"✅ Extracted features for {len(df_features)} structure(s).")
@@ -501,6 +531,7 @@ for each RNA–ligand complex you upload.
             df_pred, df_combined = predict_binding_affinity(df_features)
         if df_pred is None:
             st.error("❌ Prediction step failed due to model issues.")
+            st.markdown('</div>', unsafe_allow_html=True)
             return
 
         st.subheader("Global summary")
@@ -542,8 +573,10 @@ for each RNA–ligand complex you upload.
             with st.expander(label, expanded=False):
                 show_feature_panel(row, cleaned_path=clean_path)
 
-# -------------------- Tutorial tab --------------------
+    st.markdown('</div>', unsafe_allow_html=True)
+
 def render_tutorial():
+    st.markdown('<div class="content-card">', unsafe_allow_html=True)
     st.header("Tutorial")
 
     st.markdown(
@@ -555,7 +588,7 @@ def render_tutorial():
 
 ### 2. Run the pipeline
 
-1. Go to the **“Run Predictions”** tab  
+1. Go to the **Run Predictions** page  
 2. Choose upload mode (individual files or ZIP)  
 3. Click **“Run full pipeline (features + prediction)”**  
 4. RNALig will:
@@ -576,18 +609,26 @@ def render_tutorial():
 > structural inspection and experimental data where available.
         """
     )
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # -------------------- Main --------------------
 def main():
-    tabs = st.tabs(["🏠 Home", "📊 Run Predictions", "📖 Tutorial"])
+    # Sidebar navigation (actual page control)
+    page = st.sidebar.radio(
+        "Navigation",
+        ["Home", "Run Predictions", "Tutorial"],
+        index=0,
+    )
 
-    with tabs[0]:
-        render_home()
+    # Header + navbar
+    render_header(page)
 
-    with tabs[1]:
+    # Page contents
+    if page == "Home":
+        render_home_content()
+    elif page == "Run Predictions":
         render_run_pipeline()
-
-    with tabs[2]:
+    else:
         render_tutorial()
 
 
