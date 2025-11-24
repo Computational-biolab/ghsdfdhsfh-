@@ -317,7 +317,7 @@ def render_home():
         )
         st.markdown("")
         st.markdown(
-            "👉 Use the **“Run RNALig”** tab to upload your own complexes and run the full pipeline."
+            " Use the **“Run RNALig”** tab to upload your own complexes and run the full pipeline."
         )
 
     with col_demo:
@@ -442,7 +442,7 @@ for each RNA–ligand complex you upload.
                 st.error(f"❌ Feature extraction failed: {e}")
                 return
 
-        st.success(f"✅ Extracted features for {len(df_features)} structure(s).")
+        st.success(f" Extracted features for {len(df_features)} structure(s).")
 
         with st.spinner("Predicting binding affinities..."):
             df_pred, df_combined = predict_binding_affinity(df_features)
@@ -454,7 +454,7 @@ for each RNA–ligand complex you upload.
         st.markdown("**All predictions**")
         st.dataframe(df_pred, use_container_width=True)
 
-        st.markdown("#### 📥 Download results")
+        st.markdown("#### Download results")
         st.download_button(
             "Download all features (CSV)",
             data=df_features.to_csv(index=False).encode("utf-8"),
@@ -480,11 +480,11 @@ for each RNA–ligand complex you upload.
             if id_col:
                 pdb_id = row[id_col]
                 clean_path = cleaned_map.get(pdb_id)
-                label = f"📁 {pdb_id}"
+                label = f" {pdb_id}"
             else:
                 pdb_id = f"row_{idx}"
                 clean_path = None
-                label = f"📁 Complex {idx}"
+                label = f" Complex {idx}"
 
             with st.expander(label, expanded=False):
                 show_feature_panel(row, cleaned_path=clean_path)
@@ -526,7 +526,7 @@ def render_docs():
 
 # -------------------- Main --------------------
 def main():
-    tabs = st.tabs(["🏠 Home", "📊 Run RNALig", "📖 Docs"])
+    tabs = st.tabs([" Home", " Run Predictions", "📖 Tutorial"])
 
     with tabs[0]:
         render_home()
