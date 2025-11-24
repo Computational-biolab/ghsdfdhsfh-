@@ -54,22 +54,14 @@ st.markdown(
         color: #777;
     }
 
-    /* HEADER BAR */
-    .header-bar {
-        width: 100%;
-        display: flex;
-        align-items: center;
-        padding: 10px 16px;
+    /* HEADER BAR (no tabs) */
+    .header-wrap {
         background: #ffffff;
+        border-radius: 0 0 18px 18px;
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+        padding: 10px 22px 14px 22px;
+        margin-bottom: 18px;
         border-bottom: 1px solid #e5e7eb;
-        box-shadow: 0 4px 10px rgba(15, 23, 42, 0.05);
-        margin-bottom: 10px;
-        border-radius: 0 0 16px 16px;
-    }
-
-    .header-logo {
-        height: 70px;
-        margin-right: 16px;
     }
 
     .header-title {
@@ -77,35 +69,12 @@ st.markdown(
         font-weight: 800;
         font-family: 'Inter', sans-serif;
         color: #1f2933;
-        margin-bottom: 2px;
+        margin-bottom: 4px;
     }
 
     .header-subtitle {
         font-size: 14px;
         color: #6b7280;
-    }
-
-    /* NAVBAR (under header) */
-    .top-nav {
-        display: flex;
-        gap: 8px;
-        margin: 12px 0 16px 0;
-    }
-
-    .nav-pill {
-        padding: 4px 14px;
-        border-radius: 999px;
-        border: 1px solid #e5e7eb;
-        background: #f9fafb;
-        font-size: 0.9rem;
-        color: #4b5563;
-        font-family: 'Inter', sans-serif;
-    }
-
-    .nav-pill-active {
-        background: #ef4444;
-        border-color: #ef4444;
-        color: #ffffff;
     }
 
     /* Main white card for page content */
@@ -321,51 +290,36 @@ def find_demo_pdbs() -> List[str]:
     demos.sort()
     return demos
 
-# -------------------- Header & Navbar --------------------
-def render_header(current_page: str):
-    # Try common logo names
+# -------------------- Header (logo + title, no tabs) --------------------
+def render_header():
+    st.markdown('<div class="header-wrap">', unsafe_allow_html=True)
+
+    col_logo, col_text = st.columns([0.14, 0.86])
+
     logo_path = None
     for candidate in ["rnalig_logo.png", "RNALig_logo.png", "logo.png"]:
         if os.path.exists(candidate):
             logo_path = candidate
             break
 
-    # Header bar
-    st.markdown('<div class="header-bar">', unsafe_allow_html=True)
+    with col_logo:
+        if logo_path:
+            st.image(logo_path, use_column_width=True)
+        else:
+            st.write("RNALig")
 
-    # Logo on the left
-    if logo_path:
-        # Use markdown with <img> so CSS class applies
-        st.markdown(f'<img src="{logo_path}" class="header-logo">', unsafe_allow_html=True)
-    else:
-        st.write("RNALig")
-
-    # Title + subtitle
-    st.markdown(
-        """
-        <div>
+    with col_text:
+        st.markdown(
+            """
             <div class="header-title">RNALig – RNA–Ligand Binding Affinity Pipeline</div>
-            <div class="header-subtitle">AI-driven scoring & interpretability for RNA–ligand complexes</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+            <div class="header-subtitle">
+                AI-driven scoring & interpretability for RNA–ligand complexes
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     st.markdown("</div>", unsafe_allow_html=True)
-
-    # Navbar just under the header
-    def pill(label: str, page_name: str) -> str:
-        active = "nav-pill nav-pill-active" if current_page == page_name else "nav-pill"
-        return f'<span class="{active}">{label}</span>'
-
-    nav_html = (
-        '<div class="top-nav">'
-        f'{pill("Home", "Home")}'
-        f'{pill("Run Predictions", "Run Predictions")}'
-        f'{pill("Tutorial", "Tutorial")}'
-        "</div>"
-    )
-    st.markdown(nav_html, unsafe_allow_html=True)
 
 # -------------------- Page contents --------------------
 def render_home_content():
@@ -613,15 +567,15 @@ def render_tutorial():
 
 # -------------------- Main --------------------
 def main():
-    # Sidebar navigation (actual page control)
+    # Sidebar navigation
     page = st.sidebar.radio(
         "Navigation",
         ["Home", "Run Predictions", "Tutorial"],
         index=0,
     )
 
-    # Header + navbar
-    render_header(page)
+    # Header (logo + title)
+    render_header()
 
     # Page contents
     if page == "Home":
