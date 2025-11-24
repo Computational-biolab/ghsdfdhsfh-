@@ -22,7 +22,6 @@ st.set_page_config(
     layout="wide",
 )
 
-# General layout + tab spacing + hero styling
 st.markdown(
     """
     <style>
@@ -276,7 +275,7 @@ def find_demo_pdbs() -> List[str]:
 
 # -------------------- Home tab --------------------
 def render_home():
-    # Hero: centered logo + text
+    # Hero: centered logo + title
     logo_path = None
     for candidate in ["rnalig_logo.png", "RNALig_logo.png", "logo.png"]:
         if os.path.exists(candidate):
@@ -296,64 +295,67 @@ def render_home():
         '<div class="hero-title">RNALig – RNA–Ligand Binding Affinity Pipeline</div>',
         unsafe_allow_html=True,
     )
-    st.markdown(
-        '<div class="hero-subtitle">'
-        'From raw RNA–ligand structures to interpretable binding affinity predictions, '
-        'with full feature visibility for every complex.'
-        '</div>',
-        unsafe_allow_html=True,
-    )
     st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown("")
-    st.markdown(
-        """
-**Key capabilities**
+    # Overview + demo side-by-side (like RSApred style)
+    st.markdown("### Overview")
+    col_text, col_demo = st.columns([2, 1.4])
 
-- Upload **PDB/mmCIF** files or a **ZIP** of complexes  
-- Automatic **cleaning** and ligand pocket extraction  
-- Rich **structural & physicochemical features** (SASA, contacts, H-bonds, electrostatics…)  
-- Random Forest model for **binding affinity estimation**  
-- Per-complex **feature tables, bar plots, and 3D views**
-        """
-    )
-    st.markdown("👉 Use the **“Run RNALig”** tab above to start an analysis.")
-    st.markdown("---")
-
-    # Demo "movie" – one viewer cycling through all demo PDBs
-    st.subheader("Demo RNA–ligand complexes")
-
-    demo_files = find_demo_pdbs()
-    if not demo_files:
-        st.info(
-            "Place one or more demo PDB files in this folder with names like "
-            "`demo1.pdb`, `demo2.pdb`, ... to show an animated example here."
+    with col_text:
+        st.write(
+            "RNALig is an AI-driven scoring function that estimates RNA–ligand binding "
+            "affinities directly from 3D complexes. It automatically cleans raw PDB/mmCIF "
+            "files, standardises ligands, and detects the RNA binding pocket. A rich set "
+            "of structural and physicochemical descriptors—including SASA, non-covalent "
+            "contacts, hydrogen bonds, stacking interactions and electrostatics—is "
+            "extracted for each complex. These features are fed into a trained Random "
+            "Forest model to predict binding affinity in kcal/mol. The interface is "
+            "designed as an end-to-end pipeline that exposes both the feature table and "
+            "final scores for every structure, supporting interpretability, screening and "
+            "method benchmarking."
         )
-    else:
-        st.caption("All demo complexes will play one by one in this viewer.")
+        st.markdown("")
+        st.markdown(
+            "👉 Use the **“Run RNALig”** tab to upload your own complexes and run the full pipeline."
+        )
 
-        placeholder = st.empty()
+    with col_demo:
+        st.subheader("Demo RNA–ligand movie", anchor=False)
 
-        if st.button("▶ Play demo animation"):
-            for _ in range(2):  # number of loops over all demos
-                for fname in demo_files:
-                    try:
-                        with open(fname, "r") as f:
-                            pdb_block = f.read()
-                    except Exception as e:
-                        continue
-                    with placeholder.container():
-                        st.write(f"Showing: `{fname}`")
-                        show_3d_structure(pdb_block, spin=True)
-                    time.sleep(1.5)  # seconds per structure
+        demo_files = find_demo_pdbs()
+        if not demo_files:
+            st.info(
+                "Place one or more demo PDB files in this folder with names like "
+                "`demo1.pdb`, `demo2.pdb`, ... to show an animated example here."
+            )
+        else:
+            st.caption("The viewer will cycle through all demo complexes.")
 
-        # also show first demo statically so viewer is not empty
-        if demo_files:
-            with open(demo_files[0], "r") as f:
-                pdb_block0 = f.read()
-            with placeholder.container():
-                st.write(f"Showing: `{demo_files[0]}`")
-                show_3d_structure(pdb_block0, spin=True)
+            placeholder = st.empty()
+
+            if st.button("▶ Play demo animation"):
+                # Loop over all demo structures twice
+                for _ in range(2):
+                    for fname in demo_files:
+                        try:
+                            with open(fname, "r") as f:
+                                pdb_block = f.read()
+                        except Exception:
+                            continue
+                        with placeholder.container():
+                            st.write(f"Showing: `{fname}`")
+                            show_3d_structure(pdb_block, spin=True)
+                        time.sleep(1.5)
+
+            # Show first demo statically so viewer is not empty
+            try:
+                with open(demo_files[0], "r") as f:
+                    pdb_block0 = f.read()
+                with placeholder.container():
+                    st.write(f"Showing: `{demo_files[0]}`")
+                    show_3d_structure(pdb_block0, spin=True)
+            except Exception:
+                pass
 
     st.markdown(
         '<p class="small-muted">RNALig is intended for research use only. Predictions should be '
