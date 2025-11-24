@@ -1,5 +1,5 @@
 import streamlit as st
-import os, tempfile, zipfile
+import os, tempfile, zipfile, time
 from typing import List, Tuple, Optional
 
 import pandas as pd
@@ -16,13 +16,13 @@ except ImportError as e:
 else:
     _feature_import_error = None
 
-
-# -------------------- Page config + light CSS --------------------
+# -------------------- Page config + CSS --------------------
 st.set_page_config(
     page_title="RNALig – RNA–Ligand Binding Affinity Pipeline",
     layout="wide",
 )
 
+# General layout + tab spacing + hero styling
 st.markdown(
     """
     <style>
@@ -31,8 +31,21 @@ st.markdown(
         padding-bottom: 1.5rem;
         max-width: 1000px;
     }
+
+    /* Center and space the tab bar */
+    .stTabs [data-baseweb="tab-list"] {
+        justify-content: center;
+        margin-top: 10px !important;
+        margin-bottom: 20px !important;
+    }
+    .stTabs [data-baseweb="tab"] {
+        font-size: 0.95rem;
+        font-weight: 600;
+    }
+
     h1, h2, h3 {
-        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+                     "Segoe UI", sans-serif;
     }
     .hero-badge {
         display: inline-block;
@@ -60,11 +73,15 @@ st.markdown(
         font-size: 0.85rem;
         color: #777;
     }
+    .hero-center {
+        text-align: center;
+        margin-top: 10px;
+        margin-bottom: 10px;
+    }
     </style>
     """,
     unsafe_allow_html=True,
 )
-
 
 # -------------------- Model loading --------------------
 @st.cache_resource
@@ -88,7 +105,6 @@ def load_model_bundle() -> Tuple[Optional[object], Optional[List[str]]]:
     if isinstance(bundle, dict) and "model" in bundle:
         return bundle["model"], bundle.get("features")
     return bundle, None
-
 
 # -------------------- Args for Features_RNALig --------------------
 def build_default_args(outdir: str):
@@ -118,7 +134,7 @@ def build_default_args(outdir: str):
     args.elec_dmax = 10.0
     args.elec_include_negative = False
 
-    # visualization flags used by Features_RNALig (kept off for speed)
+    # visualization flags
     args.viz_rna = False
     args.viz_ligand = False
     args.viz_complex = False
@@ -130,7 +146,6 @@ def build_default_args(outdir: str):
     args.rna_viz_dir = None
 
     return args
-
 
 # -------------------- Core pipeline functions --------------------
 def run_feature_extraction(pdb_paths: List[str]):
@@ -204,27 +219,18 @@ def predict_binding_affinity(df_features: pd.DataFrame):
 
     return df_pred, df_combined
 
-
-# -------------------- Visualization helpers --------------------
-def show_3d_structure(pdb_path: str, width: int = 450, height: int = 350, spin: bool = False):
-    try:
-        with open(pdb_path, "r") as f:
-            pdb_block = f.read()
-    except Exception as e:
-        st.warning(f"Could not load structure for 3D view: {e}")
-        return
-
+# -------------------- 3D viewer helpers --------------------
+def show_3d_structure(pdb_str: str, width: int = 450, height: int = 350, spin: bool = False):
+    """Render a PDB string with py3Dmol."""
     view = py3Dmol.view(width=width, height=height)
-    view.addModel(pdb_block, "pdb")
+    view.addModel(pdb_str, "pdb")
     view.setStyle({"cartoon": {"color": "spectrum"}})
     view.addStyle({"and": [{"resn": "LIG"}]}, {"stick": {"colorscheme": "cyanCarbon"}})
     view.zoomTo()
     if spin:
         view.spin(True)
-
     html = view._make_html()
     st.components.v1.html(html, height=height + 15)
-
 
 def show_feature_panel(row: pd.Series, cleaned_path: Optional[str] = None):
     pdb_id = row.get("PDB_ID", "Unknown")
@@ -248,15 +254,19 @@ def show_feature_panel(row: pd.Series, cleaned_path: Optional[str] = None):
 
     with col_right:
         if cleaned_path is not None:
-            st.markdown("**Cleaned complex (3D view)**")
-            show_3d_structure(cleaned_path, width=320, height=260, spin=False)
+            try:
+                with open(cleaned_path, "r") as f:
+                    pdb_block = f.read()
+                st.markdown("**Cleaned complex (3D view)**")
+                show_3d_structure(pdb_block, width=320, height=260, spin=False)
+            except Exception as e:
+                st.warning(f"Could not render cleaned PDB: {e}")
         else:
             st.info("No cleaned PDB found to display.")
 
-
-# -------------------- Home tab --------------------
+# -------------------- Demo helpers --------------------
 def find_demo_pdbs() -> List[str]:
-    """Return a sorted list of demo*.pdb files in the current folder."""
+    """Return sorted list of demo*.pdb files."""
     demos = []
     for fname in os.listdir("."):
         if fname.lower().endswith(".pdb") and fname.lower().startswith("demo"):
@@ -264,35 +274,36 @@ def find_demo_pdbs() -> List[str]:
     demos.sort()
     return demos
 
-
+# -------------------- Home tab --------------------
 def render_home():
-    # center everything by using middle column
-    left, center, right = st.columns([1, 2, 1])
-    with center:
-        # logo
-        logo_path = None
-        for candidate in ["rnalig_logo.png", "RNALig_logo.png", "logo.png"]:
-            if os.path.exists(candidate):
-                logo_path = candidate
-                break
-        if logo_path:
-            st.image(logo_path, width=140)
+    # Hero: centered logo + text
+    logo_path = None
+    for candidate in ["rnalig_logo.png", "RNALig_logo.png", "logo.png"]:
+        if os.path.exists(candidate):
+            logo_path = candidate
+            break
 
-        st.markdown(
-            '<div class="hero-badge">AI-driven scoring for RNA–ligand complexes</div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            '<div class="hero-title">RNALig – RNA–Ligand Binding Affinity Pipeline</div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            '<div class="hero-subtitle">'
-            'From raw RNA–ligand structures to interpretable binding affinity predictions, '
-            'with full feature visibility for every complex.'
-            '</div>',
-            unsafe_allow_html=True,
-        )
+    st.markdown('<div class="hero-center">', unsafe_allow_html=True)
+
+    if logo_path:
+        st.image(logo_path, width=150)
+
+    st.markdown(
+        '<div class="hero-badge">AI-driven scoring for RNA–ligand complexes</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="hero-title">RNALig – RNA–Ligand Binding Affinity Pipeline</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="hero-subtitle">'
+        'From raw RNA–ligand structures to interpretable binding affinity predictions, '
+        'with full feature visibility for every complex.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("")
     st.markdown(
@@ -309,24 +320,40 @@ def render_home():
     st.markdown("👉 Use the **“Run RNALig”** tab above to start an analysis.")
     st.markdown("---")
 
-    # Demo viewer – one-by-one
+    # Demo "movie" – one viewer cycling through all demo PDBs
     st.subheader("Demo RNA–ligand complexes")
 
     demo_files = find_demo_pdbs()
     if not demo_files:
         st.info(
             "Place one or more demo PDB files in this folder with names like "
-            "`demo1.pdb`, `demo2.pdb`, ... to show them here."
+            "`demo1.pdb`, `demo2.pdb`, ... to show an animated example here."
         )
     else:
-        # choose one demo at a time
-        label_map = {f: f.replace(".pdb", "") for f in demo_files}
-        selected = st.selectbox(
-            "Select a demo complex to view:",
-            options=demo_files,
-            format_func=lambda x: label_map.get(x, x),
-        )
-        show_3d_structure(selected, spin=True)
+        st.caption("All demo complexes will play one by one in this viewer.")
+
+        placeholder = st.empty()
+
+        if st.button("▶ Play demo animation"):
+            for _ in range(2):  # number of loops over all demos
+                for fname in demo_files:
+                    try:
+                        with open(fname, "r") as f:
+                            pdb_block = f.read()
+                    except Exception as e:
+                        continue
+                    with placeholder.container():
+                        st.write(f"Showing: `{fname}`")
+                        show_3d_structure(pdb_block, spin=True)
+                    time.sleep(1.5)  # seconds per structure
+
+        # also show first demo statically so viewer is not empty
+        if demo_files:
+            with open(demo_files[0], "r") as f:
+                pdb_block0 = f.read()
+            with placeholder.container():
+                st.write(f"Showing: `{demo_files[0]}`")
+                show_3d_structure(pdb_block0, spin=True)
 
     st.markdown(
         '<p class="small-muted">RNALig is intended for research use only. Predictions should be '
@@ -334,8 +361,7 @@ def render_home():
         unsafe_allow_html=True,
     )
 
-
-# -------------------- Run pipeline tab --------------------
+# -------------------- Run RNALig tab --------------------
 def render_run_pipeline():
     st.header("Run RNALig pipeline")
 
@@ -469,7 +495,6 @@ for each RNA–ligand complex you upload.
             with st.expander(label, expanded=False):
                 show_feature_panel(row, cleaned_path=clean_path)
 
-
 # -------------------- Docs tab --------------------
 def render_docs():
     st.header("Quick usage guide")
@@ -504,7 +529,6 @@ def render_docs():
 > structural inspection and experimental data where available.
         """
     )
-
 
 # -------------------- Main --------------------
 def main():
