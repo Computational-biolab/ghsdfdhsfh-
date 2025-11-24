@@ -30,10 +30,13 @@ st.markdown(
         background-color: #f4f6fb;
     }
 
+    /* Make the content stretch across the whole screen */
     .block-container {
         padding-top: 2rem !important;
         padding-bottom: 1.5rem;
-        max-width: 1100px;
+        padding-left: 2rem;
+        padding-right: 2rem;
+        max-width: 100% !important;
     }
 
     /* Center and space the tab bar */
@@ -99,13 +102,14 @@ st.markdown(
         margin-right: auto;
     }
 
-    /* Main white card for content (like RSAPred panel) */
+    /* Main white card for content – now full-width */
     .content-card {
         background: #ffffff;
         border-radius: 18px;
         padding: 2.2rem 3rem 2.4rem 3rem;
         box-shadow: 0 8px 24px rgba(15, 23, 42, 0.10);
-        margin-bottom: 1.5rem;
+        margin: 0 auto 1.5rem auto;
+        width: 100%;
     }
 
     /* Right-side movie viewer card */
@@ -204,7 +208,6 @@ def run_feature_extraction(pdb_paths: List[str]):
         row = FR.process_one_pdb(path, args)
         rows.append(row)
 
-    #     PDB_ID inside row should correspond to original name
         pdb_id = row.get("PDB_ID", os.path.splitext(base)[0])
         clean_name = os.path.splitext(base)[0] + "_clean.pdb"
         clean_path = os.path.join(outdir, clean_name)
