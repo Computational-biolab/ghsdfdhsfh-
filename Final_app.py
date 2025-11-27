@@ -18,7 +18,7 @@ else:
 
 # -------------------- Page config + CSS --------------------
 st.set_page_config(
-    page_title="RNALig – RNA–Ligand Binding Affinity Pipeline",
+    page_title="RNALig – RNA–Ligand Binding Affinity Predictor",
     layout="wide",
 )
 
