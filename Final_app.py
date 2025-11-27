@@ -311,7 +311,7 @@ def render_header():
     with col_text:
         st.markdown(
             """
-            <div class="header-title">RNALig – RNA–Ligand Binding Affinity Pipeline</div>
+            <div class="header-title">RNALig – RNA–Ligand Binding Affinity Predictor</div>
             <div class="header-subtitle">
                 AI-driven scoring & interpretability for RNA–ligand complexes
             </div>
