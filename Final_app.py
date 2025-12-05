@@ -28,7 +28,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# -------------------- Base CSS (light theme, can be overridden) --------------------
+# -------------------- Base CSS --------------------
 BASE_CSS = """
 <style>
 .main {
@@ -345,13 +345,16 @@ def show_3d_structure(
             sel = {"chain": chain, "resi": resi}
             view.addStyle(sel, {"stick": {"color": "red", "radius": 0.3}})
             try:
-                view.addResLabels(sel, {
-                    "font": "sans-serif",
-                    "fontsize": 10,
-                    "fontcolor": "0x000000",
-                    "backgroundColor": "0xFFFFFF",
-                    "showBackground": True,
-                })
+                view.addResLabels(
+                    sel,
+                    {
+                        "font": "sans-serif",
+                        "fontsize": 10,
+                        "fontcolor": "0x000000",
+                        "backgroundColor": "0xFFFFFF",
+                        "showBackground": True,
+                    },
+                )
             except Exception:
                 pass
         # Optional soft pink surface around all pocket residues
@@ -474,7 +477,12 @@ def show_feature_panel(
         if feat_importance is not None:
             overlap = [f for f in numeric_series.index if f in feat_importance.index]
             if overlap:
-                contrib = feat_importance.loc[overlap].abs().sort_values(ascending=False).head(top_k)
+                contrib = (
+                    feat_importance.loc[overlap]
+                    .abs()
+                    .sort_values(ascending=False)
+                    .head(top_k)
+                )
                 st.markdown("**Top important features (model-based)**")
                 st.table(contrib.to_frame("importance"))
 
@@ -605,14 +613,14 @@ def render_home_content():
             except Exception:
                 pass
 
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown(
         '<p class="small-muted">RNALig is intended for research use only. '
-        'Predictions should be interpreted alongside structural inspection '
-        'and experimental data.</p>',
+        "Predictions should be interpreted alongside structural inspection "
+        "and experimental data.</p>",
         unsafe_allow_html=True,
     )
 
@@ -629,7 +637,7 @@ def render_run_pipeline():
         if _feature_import_error:
             with st.expander("Import error details"):
                 st.code(_feature_import_error)
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
         return
 
     st.markdown(
@@ -694,7 +702,9 @@ for each RNA–ligand complex you upload or fetch.
         )
         if uploads:
             if len(uploads) > 5:
-                st.warning("You uploaded more than 5 files; only the first 5 will be processed.")
+                st.warning(
+                    "You uploaded more than 5 files; only the first 5 will be processed."
+                )
                 uploads = uploads[:5]
             tmp_in = tempfile.mkdtemp(prefix="rnalig_in_")
             for up in uploads:
@@ -732,7 +742,7 @@ for each RNA–ligand complex you upload or fetch.
     if st.button("Run full pipeline (features + prediction)", type="primary"):
         if not pdb_paths:
             st.error("No structures to process. Please fetch or upload files first.")
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
             return
 
         with st.spinner("Running feature extraction for all structures..."):
@@ -740,16 +750,20 @@ for each RNA–ligand complex you upload or fetch.
                 df_features, cleaned_map = run_feature_extraction(pdb_paths)
             except Exception as e:
                 st.error(f"Feature extraction failed: {e}")
-                st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
                 return
 
         st.success(f"Extracted features for {len(df_features)} structure(s).")
 
-        with st.spinner("Predicting binding affinities and computing interpretability..."):
-            df_pred, df_combined, feat_importance = predict_binding_affinity(df_features)
+        with st.spinner(
+            "Predicting binding affinities and computing interpretability..."
+        ):
+            df_pred, df_combined, feat_importance = predict_binding_affinity(
+                df_features
+            )
         if df_pred is None:
             st.error("Prediction step failed due to model issues.")
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
             return
 
         # -------- Global summary --------
@@ -805,23 +819,61 @@ for each RNA–ligand complex you upload or fetch.
         if len(df_combined) > 1:
             st.markdown("---")
             st.subheader("Feature patterns across complexes")
+
+            # All numeric features
             numeric = df_combined.select_dtypes(include=[np.number])
-            if 1 < numeric.shape[0] <= 20 and 1 < numeric.shape[1] <= 40:
-                fig, ax = plt.subplots(figsize=(min(10, 0.4 * numeric.shape[1]), 0.4 * numeric.shape[0] + 2))
-                im = ax.imshow(numeric.values, aspect="auto", cmap="viridis")
-                ax.set_yticks(range(numeric.shape[0]))
+
+            if numeric.shape[1] == 0:
+                st.info("No numeric features available to plot.")
+            else:
+                # Choose a manageable set of columns to show (e.g. top 25)
+                max_cols = 25
+
+                if feat_importance is not None:
+                    # Use model-based importance to select top features
+                    cols_ordered = [
+                        c for c in feat_importance.index if c in numeric.columns
+                    ]
+                    if not cols_ordered:
+                        cols_ordered = list(numeric.columns)
+                    top_cols = cols_ordered[:max_cols]
+                else:
+                    # Use feature variance as fallback
+                    var = numeric.var().sort_values(ascending=False)
+                    top_cols = var.index[:max_cols].tolist()
+
+                numeric_top = numeric[top_cols]
+
+                # Build the heatmap
+                fig_width = min(12, 0.45 * numeric_top.shape[1] + 2)
+                fig_height = 0.5 * numeric_top.shape[0] + 2
+                fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+
+                im = ax.imshow(numeric_top.values, aspect="auto", cmap="viridis")
+
+                # Y-axis: complexes
+                ax.set_yticks(range(numeric_top.shape[0]))
                 if "PDB_ID" in df_combined.columns:
-                    ax.set_yticklabels(df_combined["PDB_ID"].astype(str).tolist())
-                ax.set_xticks(range(numeric.shape[1]))
-                ax.set_xticklabels(numeric.columns.tolist(), rotation=60, ha="right", fontsize=8)
-                ax.set_title("Numeric feature heatmap")
+                    ax.set_yticklabels(
+                        df_combined["PDB_ID"].astype(str).tolist()
+                    )
+                else:
+                    ax.set_yticklabels(
+                        [str(i) for i in range(numeric_top.shape[0])]
+                    )
+
+                # X-axis: features
+                ax.set_xticks(range(numeric_top.shape[1]))
+                ax.set_xticklabels(
+                    numeric_top.columns.tolist(),
+                    rotation=60,
+                    ha="right",
+                    fontsize=8,
+                )
+
+                ax.set_title("Numeric feature heatmap (top features)")
                 fig.colorbar(im, ax=ax, label="Value (rounded)")
                 st.pyplot(fig)
-            else:
-                st.info(
-                    "Heatmap skipped (too many complexes or features). "
-                    "Download CSVs and explore in external tools if needed."
-                )
 
         # -------- Per-complex panels --------
         st.markdown("---")
@@ -840,9 +892,11 @@ for each RNA–ligand complex you upload or fetch.
                 label = f"Complex {idx}"
 
             with st.expander(label, expanded=False):
-                show_feature_panel(row, cleaned_path=clean_path, feat_importance=feat_importance)
+                show_feature_panel(
+                    row, cleaned_path=clean_path, feat_importance=feat_importance
+                )
 
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
 def render_tutorial():
     st.markdown('<div class="content-card">', unsafe_allow_html=True)
@@ -875,7 +929,7 @@ def render_tutorial():
 - **Global table**: overview of all complexes and predicted binding affinities  
 - **Δ Affinity table**: how each complex compares to the best binder  
 - **Feature importance panel**: top features driving the model  
-- **Heatmap**: feature patterns across complexes (when the dataset is small)  
+- **Heatmap**: feature patterns across complexes (using top features)  
 - **Per-complex panels**:
   - Full feature vector (table)
   - Bar chart of numeric features
@@ -886,7 +940,7 @@ def render_tutorial():
 > structural inspection and experimental data where available.
         """
     )
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # -------------------- Main --------------------
 def main():
