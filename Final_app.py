@@ -150,7 +150,7 @@ def build_default_args(outdir: str):
     args.elec_dmax = 10.0
     args.elec_include_negative = False
 
-    # visualization flags (kept False; visualization uses cleaned PDB)
+    # visualization flags (we do visualization here in Streamlit)
     args.viz_rna = False
     args.viz_ligand = False
     args.viz_complex = False
@@ -236,23 +236,46 @@ def predict_binding_affinity(df_features: pd.DataFrame):
     return df_pred, df_combined
 
 # -------------------- 3D viewer helpers --------------------
-def show_3d_structure(pdb_str: str, width: int = 430, height: int = 320, spin: bool = False):
-    """Render a PDB string with py3Dmol."""
+def show_3d_structure(
+    pdb_str: str,
+    width: int = 430,
+    height: int = 320,
+    spin: bool = False,
+    ligand_resn: Optional[str] = None,
+):
+    """
+    Render a PDB string with py3Dmol.
+
+    ligand_resn: 3-letter residue name of the ligand (e.g. 'PRF').
+    """
     view = py3Dmol.view(width=width, height=height)
     view.addModel(pdb_str, "pdb")
 
     # Cartoon backbone coloured by spectrum
     view.setStyle({"cartoon": {"color": "spectrum"}})
 
-    # Ligand sticks (guesses ligand as "LIG"; adjust if needed)
-    view.addStyle({"and": [{"resn": "LIG"}]}, {"stick": {"colorscheme": "cyanCarbon"}})
-
-    # Add a translucent surface over everything to give a pocket-like feel
-    try:
-        view.addSurface(py3Dmol.VDW, {"opacity": 0.35, "color": "white"})
-    except Exception:
-        # If surface fails for some weird structure, just ignore
-        pass
+    # Highlight ligand as sticks + more focused surface for "pocket"
+    if ligand_resn:
+        # ligand sticks
+        view.addStyle(
+            {"resn": ligand_resn},
+            {"stick": {"colorscheme": "magentaCarbon", "radius": 0.25}},
+        )
+        # surface around ligand only
+        try:
+            view.addSurface(
+                py3Dmol.VDW,
+                {"opacity": 0.55, "color": "white"},
+                {"resn": ligand_resn},
+            )
+        except Exception:
+            pass
+    else:
+        # fallback: global soft surface
+        try:
+            view.addSurface(py3Dmol.VDW, {"opacity": 0.35, "color": "white"})
+        except Exception:
+            pass
 
     view.zoomTo()
     if spin:
@@ -261,9 +284,21 @@ def show_3d_structure(pdb_str: str, width: int = 430, height: int = 320, spin: b
     st.components.v1.html(html, height=height + 15)
 
 def show_feature_panel(row: pd.Series, cleaned_path: Optional[str] = None):
-    """Show per-complex features, numeric bar chart, and 3D view."""
+    """
+    Show per-complex features, numeric bar chart, and 3D view.
+
+    Also parses Ligand_tag (e.g., 'PRF_A101') to extract ligand residue name 'PRF'
+    for visualization.
+    """
     pdb_id = row.get("PDB_ID", "Unknown")
     pred = row.get("Predicted_binding_affinity_kcal_mol", None)
+
+    # Parse ligand name
+    ligand_resn = None
+    ligand_tag = row.get("Ligand_tag", None)
+    if isinstance(ligand_tag, str) and len(ligand_tag) >= 3:
+        # Typically something like 'PRF_A101' -> residue name 'PRF'
+        ligand_resn = ligand_tag.split("_")[0][:3]
 
     st.markdown(f"### 🧾 {pdb_id}")
     if pred is not None:
@@ -276,13 +311,12 @@ def show_feature_panel(row: pd.Series, cleaned_path: Optional[str] = None):
         df_single = row.to_frame(name="Value")
         st.dataframe(df_single, use_container_width=True)
 
-        # Safely select numeric features for bar chart
-        df_row = row.to_frame().T              # 1-row DataFrame
-        df_num = df_row.select_dtypes(include=[np.number])
-        if not df_num.empty:
-            num_series = df_num.iloc[0]        # back to Series
+        # Numeric features for bar chart:
+        # convert everything that can be numeric, drop non-numeric
+        numeric_series = row.apply(lambda x: pd.to_numeric(x, errors="coerce")).dropna()
+        if not numeric_series.empty:
             st.markdown("**Numeric features (bar chart)**")
-            st.bar_chart(num_series)
+            st.bar_chart(numeric_series)
         else:
             st.info("No numeric features available for bar chart.")
 
@@ -292,7 +326,13 @@ def show_feature_panel(row: pd.Series, cleaned_path: Optional[str] = None):
                 with open(cleaned_path, "r") as f:
                     pdb_block = f.read()
                 st.markdown("**Cleaned complex (3D view)**")
-                show_3d_structure(pdb_block, width=320, height=260, spin=False)
+                show_3d_structure(
+                    pdb_block,
+                    width=320,
+                    height=260,
+                    spin=False,
+                    ligand_resn=ligand_resn,
+                )
             except Exception as e:
                 st.warning(f"Could not render cleaned PDB: {e}")
         else:
@@ -385,14 +425,14 @@ def render_home_content():
                 except Exception:
                     continue
                 with placeholder.container():
-                    show_3d_structure(pdb_block, spin=True)
+                    show_3d_structure(pdb_block, spin=True, ligand_resn=None)
                 time.sleep(1.0)
 
             try:
                 with open(demo_files[-1], "r") as f:
                     pdb_last = f.read()
                 with placeholder.container():
-                    show_3d_structure(pdb_last, spin=True)
+                    show_3d_structure(pdb_last, spin=True, ligand_resn=None)
             except Exception:
                 pass
 
