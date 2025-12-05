@@ -173,7 +173,7 @@ def build_default_args(outdir: str):
     args.elec_dmax = 10.0
     args.elec_include_negative = False
 
-    # visualization flags (we do visualization here in Streamlit)
+    # visualization flags
     args.viz_rna = False
     args.viz_ligand = False
     args.viz_complex = False
@@ -289,6 +289,7 @@ def show_3d_structure(
     ligand_resn: Optional[str] = None,
     ligand_chain: Optional[str] = None,
     ligand_resi: Optional[str] = None,
+    pocket_res_str: Optional[str] = None,
 ):
     """
     Render a PDB string with py3Dmol.
@@ -296,6 +297,9 @@ def show_3d_structure(
     ligand_resn  : 3-letter residue name of ligand (e.g. 'AM2')
     ligand_chain : chain ID of ligand (e.g. 'A')
     ligand_resi  : residue index of ligand (e.g. '102')
+
+    pocket_res_str : comma/space-separated pocket residues, e.g.:
+        'A17,A18,A19' or 'A:17 A:18'
     """
     view = py3Dmol.view(width=width, height=height)
     view.addModel(pdb_str, "pdb")
@@ -320,8 +324,50 @@ def show_3d_structure(
         except Exception:
             pass
 
-    # Pocket residues (approx: ±2 residues around ligand in same chain)
-    if ligand_chain and ligand_resi:
+    # Explicit pocket residues from feature column, if available
+    pocket_residues = []
+    if isinstance(pocket_res_str, str) and pocket_res_str.strip():
+        tokens = re.split(r"[,\s;]+", pocket_res_str.strip())
+        for tok in tokens:
+            if not tok:
+                continue
+            # patterns: A17, A:17, a17
+            m = re.match(r"([A-Za-z])[:]?(\d+)", tok)
+            if not m:
+                continue
+            chain = m.group(1)
+            resi = int(m.group(2))
+            pocket_residues.append((chain, resi))
+
+    if pocket_residues:
+        # Highlight each pocket residue in red sticks + label
+        for chain, resi in pocket_residues:
+            sel = {"chain": chain, "resi": resi}
+            view.addStyle(sel, {"stick": {"color": "red", "radius": 0.3}})
+            try:
+                view.addResLabels(sel, {
+                    "font": "sans-serif",
+                    "fontsize": 10,
+                    "fontcolor": "0x000000",
+                    "backgroundColor": "0xFFFFFF",
+                    "showBackground": True,
+                })
+            except Exception:
+                pass
+        # Optional soft pink surface around all pocket residues
+        try:
+            chains = list({c for c, _ in pocket_residues})
+            resi_vals = [r for _, r in pocket_residues]
+            view.addSurface(
+                py3Dmol.VDW,
+                {"opacity": 0.35, "color": "0xFFCCCC"},
+                {"and": [{"chain": chains}, {"resi": resi_vals}]},
+            )
+        except Exception:
+            pass
+
+    # If no explicit pocket list, fallback to ±2 residues around ligand in same chain
+    elif ligand_chain and ligand_resi:
         try:
             resi_int = int(ligand_resi)
         except ValueError:
@@ -343,7 +389,7 @@ def show_3d_structure(
                 pass
 
     # Fallback global surface
-    if not ligand_resn and not (ligand_chain and ligand_resi):
+    if not ligand_resn and not pocket_residues and not (ligand_chain and ligand_resi):
         try:
             view.addSurface(py3Dmol.VDW, {"opacity": 0.35, "color": "white"})
         except Exception:
@@ -355,34 +401,6 @@ def show_3d_structure(
     html = view._make_html()
     st.components.v1.html(html, height=height + 15)
 
-# -------------------- Quality checks --------------------
-def quality_checks(row: pd.Series) -> List[str]:
-    """Simple sanity checks using available features."""
-    warnings = []
-
-    length = row.get("RNA_length", None)
-    if isinstance(length, (int, float)) and length < 10:
-        warnings.append("RNA_length is very short (<10 nt).")
-
-    gc = row.get("RNA_GC_percent", None)
-    if isinstance(gc, (int, float)) and (gc < 20 or gc > 80):
-        warnings.append("RNA_GC_percent is extreme (<20% or >80%).")
-
-    sasa = row.get("RNA_SASA_total_A2", None)
-    if isinstance(sasa, (int, float)) and sasa < 1000:
-        warnings.append("Total RNA_SASA_total_A2 is low; structure might be compact or incomplete.")
-
-    pocket_depth = row.get("pocket_depth", None)
-    if isinstance(pocket_depth, (int, float)) and pocket_depth < 0.3:
-        warnings.append("Pocket depth is shallow (<0.3 Å).")
-
-    # You can add more conditions based on your feature names
-
-    if not warnings:
-        warnings.append("No obvious structural issues detected based on available features.")
-
-    return warnings
-
 # -------------------- Per-complex panel --------------------
 def show_feature_panel(
     row: pd.Series,
@@ -392,13 +410,14 @@ def show_feature_panel(
 ):
     """
     Show per-complex features, numeric bar chart, ligand summary,
-    quality checks and 3D view.
+    and 3D view with ligand + pocket residues.
 
     Parses Ligand_tag (e.g., 'AM2_A102' or 'AM2_A_102') to extract:
       ligand_resn = 'AM2'
       ligand_chain = 'A'
       ligand_resi = '102'
     """
+
     pdb_id = row.get("PDB_ID", "Unknown")
     pred = row.get("Predicted_binding_affinity_kcal_mol", None)
 
@@ -420,6 +439,16 @@ def show_feature_panel(
             ligand_resn = parts[0][:3]
             ligand_chain = parts[1][0] if parts[1] else None
             ligand_resi = parts[2]
+
+    # --- Try to find a pocket-residue column ---
+    pocket_res_str = None
+    for col in row.index:
+        c_low = col.lower()
+        if "pocket" in c_low and "res" in c_low:
+            val = row[col]
+            if isinstance(val, str) and val.strip():
+                pocket_res_str = val
+                break
 
     st.markdown(f"### 🧾 {pdb_id}")
     if pred is not None:
@@ -457,12 +486,6 @@ def show_feature_panel(
             df_lig = pd.Series(ligand_feats).to_frame("Value")
             st.dataframe(df_lig, use_container_width=True, height=180)
 
-        # Quality checks
-        st.markdown("**Quality checks**")
-        checks = quality_checks(row)
-        for w in checks:
-            st.write("•", w)
-
         # 3D viewer
         if cleaned_path is not None:
             try:
@@ -477,6 +500,7 @@ def show_feature_panel(
                     ligand_resn=ligand_resn,
                     ligand_chain=ligand_chain,
                     ligand_resi=ligand_resi,
+                    pocket_res_str=pocket_res_str,
                 )
             except Exception as e:
                 st.warning(f"Could not render cleaned PDB: {e}")
@@ -856,7 +880,6 @@ def render_tutorial():
   - Full feature vector (table)
   - Bar chart of numeric features
   - Ligand-centric feature summary
-  - Quality check messages
   - 3D view of cleaned complex with ligand & pocket highlighted
 
 > RNALig is a research tool. Predictions should be interpreted together with
