@@ -532,9 +532,9 @@ def render_footer():
     lab_logo = None
     # Put your actual lab logo filename here (or a couple of options)
     for candidate in [
-        "computationalbiolab_logo.png",
-        "CompBioLab_logo.png",
-        "NextGenComputationalBiologyLab.png",
+        "Lab_logo.png",
+        "Computationalbiolab_logo.png",
+        "CompBioLab.png",
     ]:
         if os.path.exists(candidate):
             lab_logo = candidate
@@ -547,8 +547,8 @@ def render_footer():
     with col_text:
         st.markdown(
             """
-**Computational BioLab – NextGen Computational Biology Lab**  
-Department of Biosciences & Bioengineering  
+**Computational BioLab**  
+Email: computationalbiolab@gmail.com  
 All rights reserved.
             """
         )
@@ -688,7 +688,7 @@ for each RNA–ligand complex you upload or fetch.
                     pdb_paths.append(out_path)
 
                 if pdb_paths:
-                    st.success(f"✅ Fetched {len(pdb_paths)} PDB file(s) from RCSB.")
+                    st.success(f" Fetched {len(pdb_paths)} PDB file(s) from RCSB.")
 
     # ---------- Option 2: Upload up to 5 PDB/mmCIF ----------
     elif mode.startswith("Option 2"):
