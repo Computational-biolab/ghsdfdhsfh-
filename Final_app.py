@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import py3Dmol
 import streamlit as st
+import matplotlib.pyplot as plt
 
 # -------------------- Import your feature extractor --------------------
 try:
@@ -21,88 +22,105 @@ except ImportError as e:
 else:
     _feature_import_error = None
 
-# -------------------- Page config + CSS --------------------
+# -------------------- Page config --------------------
 st.set_page_config(
     page_title="RNALig – RNA–Ligand Binding Affinity Predictor",
     layout="wide",
 )
 
-st.markdown(
-    """
-    <style>
-    /* Light grey app background like a webserver */
-    .main {
-        background-color: #f4f6fb;
-    }
+# -------------------- Base CSS (light theme, can be overridden) --------------------
+BASE_CSS = """
+<style>
+.main {
+    background-color: #f4f6fb;
+}
+.block-container {
+    max-width: 95% !important;
+    padding-top: 1.0rem !important;
+    padding-left: 2rem;
+    padding-right: 2rem;
+    padding-bottom: 1.5rem;
+}
+h1, h2, h3 {
+    font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+                 "Segoe UI", sans-serif;
+}
+p {
+    font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+                 "Segoe UI", sans-serif;
+    font-size: 0.96rem;
+}
+.small-muted {
+    font-size: 0.85rem;
+    color: #777;
+}
+.header-wrap {
+    background: #ffffff;
+    border-radius: 0 0 18px 18px;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+    padding: 10px 22px 14px 22px;
+    margin-bottom: 18px;
+    border-bottom: 1px solid #e5e7eb;
+}
+.header-title {
+    font-size: 28px;
+    font-weight: 800;
+    font-family: 'Inter', sans-serif;
+    color: #1f2933;
+    margin-bottom: 4px;
+}
+.header-subtitle {
+    font-size: 14px;
+    color: #6b7280;
+}
+.content-card {
+    background: #ffffff;
+    border-radius: 18px;
+    padding: 2.0rem 2.5rem 2.4rem 2.5rem;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.10);
+    margin: 0 auto 1.5rem auto;
+    width: 100%;
+}
+.movie-card {
+    background: #f9fafb;
+    border-radius: 16px;
+    padding: 0.8rem 0.8rem 0.2rem 0.8rem;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.10);
+}
+.dark-background {
+    background-color: #0b1220;
+}
+</style>
+"""
+st.markdown(BASE_CSS, unsafe_allow_html=True)
 
-    /* Make the content use almost full width */
-    .block-container {
-        max-width: 95% !important;
-        padding-top: 1.0rem !important;
-        padding-left: 2rem;
-        padding-right: 2rem;
-        padding-bottom: 1.5rem;
-    }
 
-    h1, h2, h3 {
-        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont,
-                     "Segoe UI", sans-serif;
-    }
-    p {
-        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont,
-                     "Segoe UI", sans-serif;
-        font-size: 0.96rem;
-    }
-
-    .small-muted {
-        font-size: 0.85rem;
-        color: #777;
-    }
-
-    /* HEADER BAR (no tabs) */
-    .header-wrap {
-        background: #ffffff;
-        border-radius: 0 0 18px 18px;
-        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
-        padding: 10px 22px 14px 22px;
-        margin-bottom: 18px;
-        border-bottom: 1px solid #e5e7eb;
-    }
-
-    .header-title {
-        font-size: 28px;
-        font-weight: 800;
-        font-family: 'Inter', sans-serif;
-        color: #1f2933;
-        margin-bottom: 4px;
-    }
-
-    .header-subtitle {
-        font-size: 14px;
-        color: #6b7280;
-    }
-
-    /* Main white card for page content */
-    .content-card {
-        background: #ffffff;
-        border-radius: 18px;
-        padding: 2.0rem 2.5rem 2.4rem 2.5rem;
-        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.10);
-        margin: 0 auto 1.5rem auto;
-        width: 100%;
-    }
-
-    /* Right-side movie viewer card */
-    .movie-card {
-        background: #f9fafb;
-        border-radius: 16px;
-        padding: 0.8rem 0.8rem 0.2rem 0.8rem;
-        box-shadow: 0 4px 16px rgba(15, 23, 42, 0.10);
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+def apply_theme(theme: str):
+    """Simple light/dark override."""
+    if theme == "Dark":
+        st.markdown(
+            """
+            <style>
+            .main {
+                background-color: #020617;
+                color: #e5e7eb;
+            }
+            .content-card, .header-wrap {
+                background-color: #020617;
+                color: #e5e7eb;
+                box-shadow: 0 8px 24px rgba(15, 23, 42, 0.80);
+                border: 1px solid #1f2937;
+            }
+            .header-title { color: #e5e7eb; }
+            .header-subtitle { color: #9ca3af; }
+            .stButton>button {
+                background-color: #1d4ed8 !important;
+                color: white !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
 
 # -------------------- Model loading --------------------
 @st.cache_resource
@@ -208,10 +226,19 @@ def run_feature_extraction(pdb_paths: List[str]):
     return df, cleaned_map
 
 
+def get_model_feature_importance(model, feat_names: List[str]) -> Optional[pd.Series]:
+    """Return global feature importance if model supports it."""
+    if hasattr(model, "feature_importances_"):
+        fi = model.feature_importances_
+        if feat_names is not None and len(feat_names) == len(fi):
+            return pd.Series(fi, index=feat_names).sort_values(ascending=False)
+    return None
+
+
 def predict_binding_affinity(df_features: pd.DataFrame):
     model, feat_names = load_model_bundle()
     if model is None:
-        return None, None
+        return None, None, None
 
     id_col = None
     for c in df_features.columns:
@@ -221,17 +248,20 @@ def predict_binding_affinity(df_features: pd.DataFrame):
 
     numeric = df_features.select_dtypes(include=[np.number]).copy()
 
+    # input order for model
     if feat_names:
         for f in feat_names:
             if f not in numeric.columns:
                 numeric[f] = np.nan
         X = numeric[feat_names].astype(float)
+        used_feature_names = feat_names
     else:
         X = numeric
+        used_feature_names = list(numeric.columns)
 
     X = X.fillna(X.median())
     y_pred = model.predict(X)
-    y_pred = np.round(y_pred, 3)  # show predictions with 3 decimals
+    y_pred = np.round(y_pred, 3)  # predictions with 3 decimals
 
     if id_col is not None:
         df_pred = pd.DataFrame(
@@ -245,7 +275,10 @@ def predict_binding_affinity(df_features: pd.DataFrame):
     df_combined = df_features.copy()
     df_combined["Predicted_binding_affinity_kcal_mol"] = y_pred
 
-    return df_pred, df_combined
+    # global feature importance (if available)
+    feat_importance = get_model_feature_importance(model, used_feature_names)
+
+    return df_pred, df_combined, feat_importance
 
 # -------------------- 3D viewer helpers --------------------
 def show_3d_structure(
@@ -277,7 +310,6 @@ def show_3d_structure(
             {"resn": ligand_resn},
             {"stick": {"colorscheme": "magentaCarbon", "radius": 0.25}},
         )
-
         # Surface around ligand only (white pocket cavity)
         try:
             view.addSurface(
@@ -297,12 +329,10 @@ def show_3d_structure(
 
         if resi_int is not None:
             pocket_resis = [str(r) for r in range(resi_int - 2, resi_int + 3)]
-            # Red sticks for pocket nucleotides
             view.addStyle(
                 {"and": [{"chain": ligand_chain}, {"resi": pocket_resis}]},
                 {"stick": {"color": "red", "radius": 0.25}},
             )
-            # Light red surface around pocket nucleotides
             try:
                 view.addSurface(
                     py3Dmol.VDW,
@@ -312,7 +342,7 @@ def show_3d_structure(
             except Exception:
                 pass
 
-    # Fallback: if no ligand info, show a soft global surface
+    # Fallback global surface
     if not ligand_resn and not (ligand_chain and ligand_resi):
         try:
             view.addSurface(py3Dmol.VDW, {"opacity": 0.35, "color": "white"})
@@ -325,10 +355,44 @@ def show_3d_structure(
     html = view._make_html()
     st.components.v1.html(html, height=height + 15)
 
+# -------------------- Quality checks --------------------
+def quality_checks(row: pd.Series) -> List[str]:
+    """Simple sanity checks using available features."""
+    warnings = []
 
-def show_feature_panel(row: pd.Series, cleaned_path: Optional[str] = None):
+    length = row.get("RNA_length", None)
+    if isinstance(length, (int, float)) and length < 10:
+        warnings.append("RNA_length is very short (<10 nt).")
+
+    gc = row.get("RNA_GC_percent", None)
+    if isinstance(gc, (int, float)) and (gc < 20 or gc > 80):
+        warnings.append("RNA_GC_percent is extreme (<20% or >80%).")
+
+    sasa = row.get("RNA_SASA_total_A2", None)
+    if isinstance(sasa, (int, float)) and sasa < 1000:
+        warnings.append("Total RNA_SASA_total_A2 is low; structure might be compact or incomplete.")
+
+    pocket_depth = row.get("pocket_depth", None)
+    if isinstance(pocket_depth, (int, float)) and pocket_depth < 0.3:
+        warnings.append("Pocket depth is shallow (<0.3 Å).")
+
+    # You can add more conditions based on your feature names
+
+    if not warnings:
+        warnings.append("No obvious structural issues detected based on available features.")
+
+    return warnings
+
+# -------------------- Per-complex panel --------------------
+def show_feature_panel(
+    row: pd.Series,
+    cleaned_path: Optional[str] = None,
+    feat_importance: Optional[pd.Series] = None,
+    top_k: int = 10,
+):
     """
-    Show per-complex features, numeric bar chart, and 3D view.
+    Show per-complex features, numeric bar chart, ligand summary,
+    quality checks and 3D view.
 
     Parses Ligand_tag (e.g., 'AM2_A102' or 'AM2_A_102') to extract:
       ligand_resn = 'AM2'
@@ -346,16 +410,13 @@ def show_feature_panel(row: pd.Series, cleaned_path: Optional[str] = None):
 
     if isinstance(ligand_tag, str):
         parts = ligand_tag.split("_")
-        # Common patterns: "AM2_A102"  or  "AM2_A_102"
         if len(parts) == 2:
-            # 'AM2', 'A102'
             ligand_resn = parts[0][:3]
             rest = parts[1]
             if len(rest) >= 2:
                 ligand_chain = rest[0]
                 ligand_resi = rest[1:]
         elif len(parts) >= 3:
-            # 'AM2', 'A', '102'
             ligand_resn = parts[0][:3]
             ligand_chain = parts[1][0] if parts[1] else None
             ligand_resi = parts[2]
@@ -380,7 +441,29 @@ def show_feature_panel(row: pd.Series, cleaned_path: Optional[str] = None):
         else:
             st.info("No numeric features available for bar chart.")
 
+        # Per-complex top-important features (intersection with model importance)
+        if feat_importance is not None:
+            overlap = [f for f in numeric_series.index if f in feat_importance.index]
+            if overlap:
+                contrib = feat_importance.loc[overlap].abs().sort_values(ascending=False).head(top_k)
+                st.markdown("**Top important features (model-based)**")
+                st.table(contrib.to_frame("importance"))
+
     with col_right:
+        # Ligand summary card
+        ligand_feats = {k: v for k, v in row.items() if k.lower().startswith("ligand_")}
+        if ligand_feats:
+            st.markdown("**Ligand summary**")
+            df_lig = pd.Series(ligand_feats).to_frame("Value")
+            st.dataframe(df_lig, use_container_width=True, height=180)
+
+        # Quality checks
+        st.markdown("**Quality checks**")
+        checks = quality_checks(row)
+        for w in checks:
+            st.write("•", w)
+
+        # 3D viewer
         if cleaned_path is not None:
             try:
                 with open(cleaned_path, "r") as f:
@@ -567,7 +650,7 @@ for each RNA–ligand complex you upload or fetch.
                         resp = requests.get(url, timeout=15)
                         resp.raise_for_status()
                     except Exception as e:
-                        st.warning(f"❌ Could not fetch {pid} from RCSB: {e}")
+                        st.warning(f"❌ Could not fetch {pid.upper()} from RCSB: {e}")
                         continue
 
                     out_path = os.path.join(tmp_in, f"{pid}.pdb")
@@ -638,17 +721,29 @@ for each RNA–ligand complex you upload or fetch.
 
         st.success(f"Extracted features for {len(df_features)} structure(s).")
 
-        with st.spinner("Predicting binding affinities..."):
-            df_pred, df_combined = predict_binding_affinity(df_features)
+        with st.spinner("Predicting binding affinities and computing interpretability..."):
+            df_pred, df_combined, feat_importance = predict_binding_affinity(df_features)
         if df_pred is None:
             st.error("Prediction step failed due to model issues.")
             st.markdown('</div>', unsafe_allow_html=True)
             return
 
+        # -------- Global summary --------
         st.subheader("Global summary")
         st.markdown("**All predictions**")
         st.dataframe(df_pred, use_container_width=True)
 
+        # Comparison mode: ΔG vs best binder
+        if len(df_pred) > 1:
+            st.markdown("**Δ Affinity vs best binder**")
+            colname = "Predicted_binding_affinity_kcal_mol"
+            best_idx = df_pred[colname].idxmin()
+            best_val = df_pred.loc[best_idx, colname]
+            df_cmp = df_pred.copy()
+            df_cmp["ΔG_vs_best"] = (df_cmp[colname] - best_val).round(3)
+            st.dataframe(df_cmp, use_container_width=True)
+
+        # Download buttons
         st.markdown("#### Download results")
         st.download_button(
             "Download all features (CSV)",
@@ -666,6 +761,45 @@ for each RNA–ligand complex you upload or fetch.
             file_name="RNALig_features_with_predictions.csv",
         )
 
+        # -------- Global interpretability --------
+        if feat_importance is not None:
+            st.markdown("---")
+            st.subheader("Global model interpretability")
+            st.markdown("**Top 20 most important features (Random Forest)**")
+            top20 = feat_importance.head(20)
+            st.table(top20.to_frame("importance"))
+
+            # small bar plot
+            fig, ax = plt.subplots(figsize=(8, 4))
+            top20.plot(kind="bar", ax=ax)
+            ax.set_ylabel("Importance")
+            ax.set_title("Feature importance")
+            plt.xticks(rotation=60, ha="right")
+            st.pyplot(fig)
+
+        # -------- Global numeric-feature heatmap --------
+        if len(df_combined) > 1:
+            st.markdown("---")
+            st.subheader("Feature patterns across complexes")
+            numeric = df_combined.select_dtypes(include=[np.number])
+            if 1 < numeric.shape[0] <= 20 and 1 < numeric.shape[1] <= 40:
+                fig, ax = plt.subplots(figsize=(min(10, 0.4 * numeric.shape[1]), 0.4 * numeric.shape[0] + 2))
+                im = ax.imshow(numeric.values, aspect="auto", cmap="viridis")
+                ax.set_yticks(range(numeric.shape[0]))
+                if "PDB_ID" in df_combined.columns:
+                    ax.set_yticklabels(df_combined["PDB_ID"].astype(str).tolist())
+                ax.set_xticks(range(numeric.shape[1]))
+                ax.set_xticklabels(numeric.columns.tolist(), rotation=60, ha="right", fontsize=8)
+                ax.set_title("Numeric feature heatmap")
+                fig.colorbar(im, ax=ax, label="Value (rounded)")
+                st.pyplot(fig)
+            else:
+                st.info(
+                    "Heatmap skipped (too many complexes or features). "
+                    "Download CSVs and explore in external tools if needed."
+                )
+
+        # -------- Per-complex panels --------
         st.markdown("---")
         st.subheader("Per-complex feature & structure views")
 
@@ -682,7 +816,7 @@ for each RNA–ligand complex you upload or fetch.
                 label = f"Complex {idx}"
 
             with st.expander(label, expanded=False):
-                show_feature_panel(row, cleaned_path=clean_path)
+                show_feature_panel(row, cleaned_path=clean_path, feat_importance=feat_importance)
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -700,20 +834,29 @@ def render_tutorial():
 ### 2. Run the pipeline
 
 1. Go to the **Run Predictions** page  
-2. Choose upload mode (fetch from RCSB, individual files, or ZIP)  
+2. Choose mode:
+   - Fetch structures from **RCSB PDB**
+   - Upload up to 5 **PDB/mmCIF** files
+   - Upload a **ZIP** with many structures  
 3. Click **“Run full pipeline (features + prediction)”**  
 4. RNALig will:
    - Clean the complex  
    - Detect the ligand pocket  
    - Compute structural & physicochemical features  
    - Apply the trained Random Forest model  
+   - Provide interpretability & visualization
 
 ### 3. Interpret the results
 
 - **Global table**: overview of all complexes and predicted binding affinities  
+- **Δ Affinity table**: how each complex compares to the best binder  
+- **Feature importance panel**: top features driving the model  
+- **Heatmap**: feature patterns across complexes (when the dataset is small)  
 - **Per-complex panels**:
   - Full feature vector (table)
   - Bar chart of numeric features
+  - Ligand-centric feature summary
+  - Quality check messages
   - 3D view of cleaned complex with ligand & pocket highlighted
 
 > RNALig is a research tool. Predictions should be interpreted together with
@@ -724,7 +867,10 @@ def render_tutorial():
 
 # -------------------- Main --------------------
 def main():
-    # Sidebar navigation
+    # Sidebar navigation + theme
+    theme = st.sidebar.selectbox("Theme", ["Light", "Dark"], index=0)
+    apply_theme(theme)
+
     page = st.sidebar.radio(
         "Navigation",
         ["Home", "Run Predictions", "Tutorial"],
