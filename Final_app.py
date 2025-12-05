@@ -10,7 +10,6 @@ import pandas as pd
 import py3Dmol
 import requests
 import streamlit as st
-import plotly.express as px
 
 # -------------------------------------------------------------------
 # Try to import feature extractor
@@ -690,7 +689,7 @@ for each RNA–ligand complex you provide.
         )
 
         # -----------------------------------------------------
-        # Feature patterns across complexes (heatmap)
+        # Feature patterns across complexes (numeric snapshot)
         # -----------------------------------------------------
         st.markdown("---")
         st.subheader("Feature patterns across complexes")
@@ -700,23 +699,25 @@ for each RNA–ligand complex you provide.
         num_cols = [c for c in num_cols if not ("id" in c.lower())]
 
         if len(num_cols) > 0 and len(df_combined) > 1:
-            # For sanity, only plot first 30 features and 40 complexes
-            df_for_heat = df_combined[num_cols].copy()
-            if df_for_heat.shape[1] > 30:
-                df_for_heat = df_for_heat.iloc[:, :30]
-            if df_for_heat.shape[0] > 40:
-                df_for_heat = df_for_heat.iloc[:40, :]
-
-            fig = px.imshow(
-                df_for_heat,
-                labels=dict(x="Feature", y="Complex", color="Value"),
-                aspect="auto",
+            df_for_view = df_combined[num_cols].copy()
+            if df_for_view.shape[1] > 30:
+                df_for_view = df_for_view.iloc[:, :30]
+            if df_for_view.shape[0] > 40:
+                df_for_view = df_for_view.iloc[:40, :]
+            st.dataframe(
+                df_for_view,
+                use_container_width=True,
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.info(
+                "Above table shows a compact snapshot of numeric feature patterns "
+                "across complexes. For deeper analysis or custom plots, download "
+                "the CSV files above and explore in your preferred tool."
+            )
         else:
             st.info(
-                "Heatmap requires at least 2 complexes and some numeric features. "
-                "Download the CSVs above for deeper analysis if needed."
+                "At least 2 complexes and some numeric features are required "
+                "to show cross-complex patterns. Download CSVs above for "
+                "further analysis if needed."
             )
 
         # -----------------------------------------------------
