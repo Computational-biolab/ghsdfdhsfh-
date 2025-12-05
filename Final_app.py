@@ -441,7 +441,6 @@ def render_footer():
             """
 **Computational BioLab**  
 Email: [computationalbiolab@gmail.com](mailto:computationalbiolab@gmail.com)  
-All rights reserved.
             """
         )
 
