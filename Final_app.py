@@ -1,19 +1,13 @@
-import os
-import time
-import tempfile
-import zipfile
+import streamlit as st
+import os, tempfile, zipfile, time
 from typing import List, Tuple, Optional
 
-import joblib
-import numpy as np
 import pandas as pd
+import numpy as np
+import joblib
 import py3Dmol
-import requests
-import streamlit as st
 
-# -------------------------------------------------------------------
-# Try to import feature extractor
-# -------------------------------------------------------------------
+# -------------------- Import your feature extractor --------------------
 try:
     import Features_RNALig as FR
 except ImportError as e:
@@ -22,9 +16,7 @@ except ImportError as e:
 else:
     _feature_import_error = None
 
-# -------------------------------------------------------------------
-# Streamlit page config + global CSS
-# -------------------------------------------------------------------
+# -------------------- Page config + CSS --------------------
 st.set_page_config(
     page_title="RNALig – RNA–Ligand Binding Affinity Predictor",
     layout="wide",
@@ -33,25 +25,25 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* Global background */
+    /* Light grey app background like a webserver */
     .main {
         background-color: #f4f6fb;
     }
 
-    /* Wider content area */
+    /* Make the content use almost full width */
     .block-container {
         max-width: 95% !important;
-        padding-top: 0.5rem !important;
-        padding-left: 2rem !important;
-        padding-right: 2rem !important;
-        padding-bottom: 1.5rem !important;
+        padding-top: 1.0rem !important;
+        padding-left: 2rem;
+        padding-right: 2rem;
+        padding-bottom: 1.5rem;
     }
 
     h1, h2, h3 {
         font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont,
                      "Segoe UI", sans-serif;
     }
-    p, li, label, span {
+    p {
         font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont,
                      "Segoe UI", sans-serif;
         font-size: 0.96rem;
@@ -62,18 +54,18 @@ st.markdown(
         color: #777;
     }
 
-    /* HEADER BAR */
+    /* HEADER BAR (no tabs) */
     .header-wrap {
         background: #ffffff;
         border-radius: 0 0 18px 18px;
         box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
-        padding: 10px 24px 16px 24px;
+        padding: 10px 22px 14px 22px;
         margin-bottom: 18px;
         border-bottom: 1px solid #e5e7eb;
     }
 
     .header-title {
-        font-size: 27px;
+        font-size: 28px;
         font-weight: 800;
         font-family: 'Inter', sans-serif;
         color: #1f2933;
@@ -89,41 +81,25 @@ st.markdown(
     .content-card {
         background: #ffffff;
         border-radius: 18px;
-        padding: 1.8rem 2.3rem 2.2rem 2.3rem;
+        padding: 2.0rem 2.5rem 2.4rem 2.5rem;
         box-shadow: 0 8px 24px rgba(15, 23, 42, 0.10);
         margin: 0 auto 1.5rem auto;
         width: 100%;
     }
 
-    /* Demo movie card on home page */
+    /* Right-side movie viewer card */
     .movie-card {
         background: #f9fafb;
         border-radius: 16px;
         padding: 0.8rem 0.8rem 0.2rem 0.8rem;
         box-shadow: 0 4px 16px rgba(15, 23, 42, 0.10);
     }
-
-    /* Hide built-in theme switcher */
-    div[data-testid="stThemeSwitcher"] {
-        display: none !important;
-    }
-
-    /* Footer styling */
-    .footer-wrap {
-        margin-top: 1.5rem;
-        padding-top: 0.8rem;
-        border-top: 1px solid #e5e7eb;
-        font-size: 0.9rem;
-        color: #374151;
-    }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-# -------------------------------------------------------------------
-# Model loading
-# -------------------------------------------------------------------
+# -------------------- Model loading --------------------
 @st.cache_resource
 def load_model_bundle() -> Tuple[Optional[object], Optional[List[str]]]:
     """
@@ -146,10 +122,7 @@ def load_model_bundle() -> Tuple[Optional[object], Optional[List[str]]]:
         return bundle["model"], bundle.get("features")
     return bundle, None
 
-
-# -------------------------------------------------------------------
-# Default arguments for Features_RNALig
-# -------------------------------------------------------------------
+# -------------------- Args for Features_RNALig --------------------
 def build_default_args(outdir: str):
     class Args:
         pass
@@ -177,7 +150,7 @@ def build_default_args(outdir: str):
     args.elec_dmax = 10.0
     args.elec_include_negative = False
 
-    # visualization flags (we only need cleaned PDBs; pocket viz here)
+    # visualization flags (we do visualization here in Streamlit)
     args.viz_rna = False
     args.viz_ligand = False
     args.viz_complex = False
@@ -190,10 +163,7 @@ def build_default_args(outdir: str):
 
     return args
 
-
-# -------------------------------------------------------------------
-# Core pipeline functions
-# -------------------------------------------------------------------
+# -------------------- Core pipeline functions --------------------
 def run_feature_extraction(pdb_paths: List[str]):
     if FR is None or not hasattr(FR, "process_one_pdb"):
         raise RuntimeError(
@@ -213,32 +183,22 @@ def run_feature_extraction(pdb_paths: List[str]):
         row = FR.process_one_pdb(path, args)
         rows.append(row)
 
-        # Try to find cleaned pdb
         pdb_id = row.get("PDB_ID", os.path.splitext(base)[0])
-        # Assume cleaned file named something like "<pdbid>_clean.pdb"
-        candidate_names = [
-            f"{pdb_id}_clean.pdb",
-            f"{os.path.splitext(base)[0]}_clean.pdb",
-        ]
-        clean_path = None
-        for c in candidate_names:
-            cp = os.path.join(outdir, c)
-            if os.path.exists(cp):
-                clean_path = cp
-                break
-        if clean_path is not None:
+        clean_name = os.path.splitext(base)[0] + "_clean.pdb"
+        clean_path = os.path.join(outdir, clean_name)
+        if os.path.exists(clean_path):
             cleaned_map[pdb_id] = clean_path
 
     df = pd.DataFrame(rows)
 
-    # Reorder to show PDB_ID first if present
+    # Round all numeric (quantitative) features to 2 decimals
+    if not df.empty:
+        num_cols = df.select_dtypes(include=[np.number]).columns
+        df[num_cols] = df[num_cols].round(2)
+
     if "PDB_ID" in df.columns:
         cols = ["PDB_ID"] + [c for c in df.columns if c != "PDB_ID"]
         df = df[cols]
-
-    # Round numeric features to 2 decimals
-    num_cols = df.select_dtypes(include=[np.number]).columns
-    df[num_cols] = df[num_cols].round(2)
 
     return df, cleaned_map
 
@@ -248,18 +208,15 @@ def predict_binding_affinity(df_features: pd.DataFrame):
     if model is None:
         return None, None
 
-    # Try to identify ID column
     id_col = None
     for c in df_features.columns:
-        cl = c.lower()
-        if "pdb" in cl or "id" in cl or "name" in cl:
+        if "pdb" in c.lower() or "id" in c.lower() or "name" in c.lower():
             id_col = c
             break
 
     numeric = df_features.select_dtypes(include=[np.number]).copy()
 
     if feat_names:
-        # Ensure all features present
         for f in feat_names:
             if f not in numeric.columns:
                 numeric[f] = np.nan
@@ -269,21 +226,15 @@ def predict_binding_affinity(df_features: pd.DataFrame):
 
     X = X.fillna(X.median())
     y_pred = model.predict(X)
-    y_pred = np.round(y_pred.astype(float), 2)
+    y_pred = np.round(y_pred, 3)  # show predictions with 3 decimals
 
     if id_col is not None:
         df_pred = pd.DataFrame(
-            {
-                "PDB_ID": df_features[id_col],
-                "Predicted_binding_affinity_kcal_mol": y_pred,
-            }
+            {"PDB_ID": df_features[id_col], "Predicted_binding_affinity_kcal_mol": y_pred}
         )
     else:
         df_pred = pd.DataFrame(
-            {
-                "Index": np.arange(len(df_features)),
-                "Predicted_binding_affinity_kcal_mol": y_pred,
-            }
+            {"Index": np.arange(len(df_features)), "Predicted_binding_affinity_kcal_mol": y_pred}
         )
 
     df_combined = df_features.copy()
@@ -291,41 +242,77 @@ def predict_binding_affinity(df_features: pd.DataFrame):
 
     return df_pred, df_combined
 
-
-# -------------------------------------------------------------------
-# 3D viewer helpers
-# -------------------------------------------------------------------
+# -------------------- 3D viewer helpers --------------------
 def show_3d_structure(
     pdb_str: str,
     width: int = 430,
     height: int = 320,
     spin: bool = False,
+    ligand_resn: Optional[str] = None,
+    ligand_chain: Optional[str] = None,
+    ligand_resi: Optional[str] = None,
 ):
     """
     Render a PDB string with py3Dmol.
-    - RNA as cartoon
-    - Ligand as sticks (any HETATM)
-    - Pocket as translucent surface around non-ligand atoms
+
+    ligand_resn  : 3-letter residue name of ligand (e.g. 'AM2')
+    ligand_chain : chain ID of ligand (e.g. 'A')
+    ligand_resi  : residue index of ligand (e.g. '102')
     """
     view = py3Dmol.view(width=width, height=height)
     view.addModel(pdb_str, "pdb")
 
-    # RNA/protein backbone
+    # Cartoon backbone coloured by spectrum
     view.setStyle({"cartoon": {"color": "spectrum"}})
 
-    # Ligand (HETATM) as sticks
-    view.setStyle({"hetflag": True}, {"stick": {"colorscheme": "cyanCarbon"}})
-
-    # Pocket surface (everything except ligand)
-    try:
-        view.addSurface(
-            py3Dmol.SAS,
-            {"opacity": 0.25, "color": "white"},
-            {"hetflag": True, "invert": True},
+    # --- Ligand + pocket highlighting ---
+    if ligand_resn:
+        # Ligand sticks
+        view.addStyle(
+            {"resn": ligand_resn},
+            {"stick": {"colorscheme": "magentaCarbon", "radius": 0.25}},
         )
-    except Exception:
-        # If surface fails, ignore quietly
-        pass
+
+        # Surface around ligand only (white pocket cavity)
+        try:
+            view.addSurface(
+                py3Dmol.VDW,
+                {"opacity": 0.55, "color": "white"},
+                {"resn": ligand_resn},
+            )
+        except Exception:
+            pass
+
+    # Pocket residues (approx: ±2 residues around ligand in same chain)
+    if ligand_chain and ligand_resi:
+        try:
+            resi_int = int(ligand_resi)
+        except ValueError:
+            resi_int = None
+
+        if resi_int is not None:
+            pocket_resis = [str(r) for r in range(resi_int - 2, resi_int + 3)]
+            # Red sticks for pocket nucleotides
+            view.addStyle(
+                {"and": [{"chain": ligand_chain}, {"resi": pocket_resis}]},
+                {"stick": {"color": "red", "radius": 0.25}},
+            )
+            # Light red surface around pocket nucleotides
+            try:
+                view.addSurface(
+                    py3Dmol.VDW,
+                    {"opacity": 0.35, "color": "0xFFCCCC"},
+                    {"and": [{"chain": ligand_chain}, {"resi": pocket_resis}]},
+                )
+            except Exception:
+                pass
+
+    # Fallback: if no ligand info, show a soft global surface
+    if not ligand_resn and not (ligand_chain and ligand_resi):
+        try:
+            view.addSurface(py3Dmol.VDW, {"opacity": 0.35, "color": "white"})
+        except Exception:
+            pass
 
     view.zoomTo()
     if spin:
@@ -335,12 +322,42 @@ def show_3d_structure(
 
 
 def show_feature_panel(row: pd.Series, cleaned_path: Optional[str] = None):
+    """
+    Show per-complex features, numeric bar chart, and 3D view.
+
+    Parses Ligand_tag (e.g., 'AM2_A102' or 'AM2_A_102') to extract:
+      ligand_resn = 'AM2'
+      ligand_chain = 'A'
+      ligand_resi = '102'
+    """
     pdb_id = row.get("PDB_ID", "Unknown")
     pred = row.get("Predicted_binding_affinity_kcal_mol", None)
 
+    # --- Parse ligand info from Ligand_tag ---
+    ligand_resn = None
+    ligand_chain = None
+    ligand_resi = None
+    ligand_tag = row.get("Ligand_tag", None)
+
+    if isinstance(ligand_tag, str):
+        parts = ligand_tag.split("_")
+        # Common patterns: "AM2_A102"  or  "AM2_A_102"
+        if len(parts) == 2:
+            # 'AM2', 'A102'
+            ligand_resn = parts[0][:3]
+            rest = parts[1]
+            if len(rest) >= 2:
+                ligand_chain = rest[0]
+                ligand_resi = rest[1:]
+        elif len(parts) >= 3:
+            # 'AM2', 'A', '102'
+            ligand_resn = parts[0][:3]
+            ligand_chain = parts[1][0] if parts[1] else None
+            ligand_resi = parts[2]
+
     st.markdown(f"### 🧾 {pdb_id}")
-    if isinstance(pred, (float, int)):
-        st.markdown(f"**Predicted binding affinity:** `{pred:.2f} kcal/mol`")
+    if pred is not None:
+        st.markdown(f"**Predicted binding affinity:** `{pred:.3f} kcal/mol`")
 
     col_left, col_right = st.columns([2, 1])
 
@@ -349,11 +366,14 @@ def show_feature_panel(row: pd.Series, cleaned_path: Optional[str] = None):
         df_single = row.to_frame(name="Value")
         st.dataframe(df_single, use_container_width=True)
 
-        # Numeric bar chart
-        num_series = row.select_dtypes(include=[np.number])
-        if len(num_series) > 0:
+        # Numeric features for bar chart (coerce to numeric, 2 decimals)
+        numeric_series = row.apply(lambda x: pd.to_numeric(x, errors="coerce")).dropna()
+        numeric_series = numeric_series.round(2)
+        if not numeric_series.empty:
             st.markdown("**Numeric features (bar chart)**")
-            st.bar_chart(num_series)
+            st.bar_chart(numeric_series)
+        else:
+            st.info("No numeric features available for bar chart.")
 
     with col_right:
         if cleaned_path is not None:
@@ -361,18 +381,23 @@ def show_feature_panel(row: pd.Series, cleaned_path: Optional[str] = None):
                 with open(cleaned_path, "r") as f:
                     pdb_block = f.read()
                 st.markdown("**Cleaned complex (3D view)**")
-                show_3d_structure(pdb_block, width=320, height=260, spin=False)
+                show_3d_structure(
+                    pdb_block,
+                    width=320,
+                    height=260,
+                    spin=False,
+                    ligand_resn=ligand_resn,
+                    ligand_chain=ligand_chain,
+                    ligand_resi=ligand_resi,
+                )
             except Exception as e:
                 st.warning(f"Could not render cleaned PDB: {e}")
         else:
             st.info("No cleaned PDB found to display.")
 
-
-# -------------------------------------------------------------------
-# Demo helpers
-# -------------------------------------------------------------------
+# -------------------- Demo helpers --------------------
 def find_demo_pdbs() -> List[str]:
-    """Return sorted list of demo*.pdb files in the current folder."""
+    """Return sorted list of demo*.pdb files."""
     demos = []
     for fname in os.listdir("."):
         if fname.lower().endswith(".pdb") and fname.lower().startswith("demo"):
@@ -380,34 +405,30 @@ def find_demo_pdbs() -> List[str]:
     demos.sort()
     return demos
 
-
-# -------------------------------------------------------------------
-# Header (RNALig logo + title)
-# -------------------------------------------------------------------
+# -------------------- Header (logo + title, no tabs) --------------------
 def render_header():
     st.markdown('<div class="header-wrap">', unsafe_allow_html=True)
 
-    col_logo, col_text = st.columns([0.16, 0.84])
+    col_logo, col_text = st.columns([0.14, 0.86])
 
-    logo_path = "logo.png"  # RNALig logo
+    logo_path = None
+    for candidate in ["rnalig_logo.png", "RNALig_logo.png", "logo.png"]:
+        if os.path.exists(candidate):
+            logo_path = candidate
+            break
 
     with col_logo:
-        try:
-            if os.path.exists(logo_path):
-                st.image(logo_path, width=130)
-            else:
-                st.markdown("**RNALig**")
-        except Exception:
-            st.markdown("**RNALig**")
+        if logo_path:
+            st.image(logo_path, use_column_width=True)
+        else:
+            st.write("RNALig")
 
     with col_text:
         st.markdown(
             """
-            <div class="header-title">
-                RNALig – RNA–Ligand Binding Affinity Predictor
-            </div>
+            <div class="header-title">RNALig – RNA–Ligand Binding Affinity Predictor</div>
             <div class="header-subtitle">
-                AI-driven scoring &amp; interpretability for RNA–ligand complexes
+                AI-driven scoring & interpretability for RNA–ligand complexes
             </div>
             """,
             unsafe_allow_html=True,
@@ -415,33 +436,7 @@ def render_header():
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-
-# -------------------------------------------------------------------
-# Footer (Computational BioLab)
-# -------------------------------------------------------------------
-def render_footer():
-    st.markdown('<div class="footer-wrap">', unsafe_allow_html=True)
-    col_logo, col_text = st.columns([0.2, 0.8])
-
-    with col_logo:
-        lab_logo = "Lab_Logo.png"
-        if os.path.exists(lab_logo):
-            st.image(lab_logo, width=110)
-
-    with col_text:
-        st.markdown("**Computational BioLab**")
-        st.markdown(
-            "Email: "
-            "[computationalbiolab@gmail.com]"
-            "(mailto:computationalbiolab@gmail.com)"
-        )
-        st.markdown("All rights reserved.")
-    st.markdown("</div>", unsafe_allow_html=True)
-
-
-# -------------------------------------------------------------------
-# Page contents
-# -------------------------------------------------------------------
+# -------------------- Page contents --------------------
 def render_home_content():
     st.markdown('<div class="content-card">', unsafe_allow_html=True)
 
@@ -454,8 +449,8 @@ def render_home_content():
             "binding affinities directly from 3D complexes. It automatically "
             "cleans raw PDB/mmCIF files, standardises ligands and detects the "
             "RNA binding pocket. A rich set of structural and physicochemical "
-            "descriptors—including SASA, non-covalent contacts, hydrogen bonds, "
-            "stacking interactions and electrostatics—is extracted for each "
+            "descriptors, including SASA, non-covalent contacts, hydrogen bonds, "
+            "stacking interactions and electrostatics, is extracted for each "
             "complex. These features are fed into a trained Random Forest model "
             "to predict binding affinity in kcal/mol. The interface is designed "
             "as an end-to-end pipeline that exposes both the feature table and "
@@ -464,8 +459,8 @@ def render_home_content():
         )
         st.markdown("")
         st.markdown(
-            "Use the **“Run Predictions”** page to upload or fetch your own "
-            "complexes and run the full pipeline."
+            "Use the **“Run Predictions”** page to upload your own complexes "
+            "and run the full pipeline."
         )
 
     with col_demo:
@@ -479,7 +474,7 @@ def render_home_content():
             st.markdown('<div class="movie-card">', unsafe_allow_html=True)
             placeholder = st.empty()
 
-            # autoplay through all demos once
+            # autoplay through all demos once, then keep last one
             for fname in demo_files:
                 try:
                     with open(fname, "r") as f:
@@ -490,7 +485,6 @@ def render_home_content():
                     show_3d_structure(pdb_block, spin=True)
                 time.sleep(1.0)
 
-            # Finally keep last demo visible
             try:
                 with open(demo_files[-1], "r") as f:
                     pdb_last = f.read()
@@ -499,9 +493,9 @@ def render_home_content():
             except Exception:
                 pass
 
-            st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown(
         '<p class="small-muted">RNALig is intended for research use only. '
@@ -509,34 +503,6 @@ def render_home_content():
         'and experimental data.</p>',
         unsafe_allow_html=True,
     )
-
-
-def fetch_pdb_from_rcsb(pdb_id: str, outdir: str) -> Optional[str]:
-    """
-    Download PDB from RCSB by 4-letter ID.
-    Tries .pdb first, then .cif.
-    """
-    pdb_id = pdb_id.lower().strip()
-    if len(pdb_id) != 4:
-        return None
-
-    urls = [
-        f"https://files.rcsb.org/download/{pdb_id}.pdb",
-        f"https://files.rcsb.org/download/{pdb_id}.cif",
-    ]
-    for url in urls:
-        try:
-            r = requests.get(url, timeout=15)
-            if r.status_code == 200 and len(r.text) > 100:
-                ext = ".pdb" if url.endswith(".pdb") else ".cif"
-                out_path = os.path.join(outdir, f"{pdb_id}{ext}")
-                with open(out_path, "w") as f:
-                    f.write(r.text)
-                return out_path
-        except Exception:
-            continue
-    return None
-
 
 def render_run_pipeline():
     st.markdown('<div class="content-card">', unsafe_allow_html=True)
@@ -551,13 +517,13 @@ def render_run_pipeline():
         if _feature_import_error:
             with st.expander("Import error details"):
                 st.code(_feature_import_error)
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
         return
 
     st.markdown(
         """
 This page performs the full **clean → feature extraction → prediction** workflow
-for each RNA–ligand complex you provide.
+for each RNA–ligand complex you upload.
         """
     )
 
@@ -566,37 +532,14 @@ for each RNA–ligand complex you provide.
     mode = st.radio(
         "Choose how to load structures:",
         (
-            "Option 1: Fetch PDB from RCSB",
-            "Option 2: Upload up to 5 PDB/mmCIF files",
-            "Option 3: Upload a ZIP with many PDB/mmCIF files",
+            "Option 1: Upload up to 5 PDB/mmCIF files",
+            "Option 2: Upload a ZIP with many PDB/mmCIF files",
         ),
     )
 
     pdb_paths: List[str] = []
 
-    # ---------------------------------------------------------
-    # Option 1: Fetch PDBs from RCSB
-    # ---------------------------------------------------------
     if mode.startswith("Option 1"):
-        st.markdown(
-            "Enter one or more 4-letter PDB IDs (comma-separated). "
-            "Example: `1F27, 4JF2`"
-        )
-        pdb_input = st.text_input("PDB IDs")
-        if pdb_input:
-            tmp_in = tempfile.mkdtemp(prefix="rnalig_fetch_")
-            ids = [p.strip() for p in pdb_input.split(",") if p.strip()]
-            for pid in ids:
-                path = fetch_pdb_from_rcsb(pid, tmp_in)
-                if path is not None:
-                    pdb_paths.append(path)
-                else:
-                    st.warning(f"Could not fetch structure for `{pid}` from RCSB.")
-
-    # ---------------------------------------------------------
-    # Option 2: Upload up to 5 PDB/mmCIF files
-    # ---------------------------------------------------------
-    elif mode.startswith("Option 2"):
         uploads = st.file_uploader(
             "Upload PDB/mmCIF files",
             type=["pdb", "cif", "mmcif"],
@@ -613,10 +556,7 @@ for each RNA–ligand complex you provide.
                     f.write(up.getbuffer())
                 pdb_paths.append(out_path)
 
-    # ---------------------------------------------------------
-    # Option 3: Upload ZIP
-    # ---------------------------------------------------------
-    else:
+    else:  # ZIP mode
         zfile = st.file_uploader(
             "Upload a ZIP containing PDB/mmCIF files",
             type=["zip"],
@@ -640,13 +580,10 @@ for each RNA–ligand complex you provide.
             else:
                 st.error("No .pdb/.cif/.mmcif files found in the ZIP.")
 
-    # ---------------------------------------------------------
-    # Run pipeline
-    # ---------------------------------------------------------
-    if st.button(" Run full pipeline (features + prediction)", type="primary"):
+    if st.button("Run full pipeline (features + prediction)", type="primary"):
         if not pdb_paths:
-            st.error("No structures to process. Please fetch or upload files first.")
-            st.markdown("</div>", unsafe_allow_html=True)
+            st.error("No structures to process. Please upload files or a ZIP first.")
+            st.markdown('</div>', unsafe_allow_html=True)
             return
 
         with st.spinner("Running feature extraction for all structures..."):
@@ -654,7 +591,7 @@ for each RNA–ligand complex you provide.
                 df_features, cleaned_map = run_feature_extraction(pdb_paths)
             except Exception as e:
                 st.error(f"Feature extraction failed: {e}")
-                st.markdown("</div>", unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
                 return
 
         st.success(f"Extracted features for {len(df_features)} structure(s).")
@@ -663,14 +600,13 @@ for each RNA–ligand complex you provide.
             df_pred, df_combined = predict_binding_affinity(df_features)
         if df_pred is None:
             st.error("Prediction step failed due to model issues.")
-            st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
             return
 
         st.subheader("Global summary")
         st.markdown("**All predictions**")
         st.dataframe(df_pred, use_container_width=True)
 
-        # Downloads
         st.markdown("#### Download results")
         st.download_button(
             "Download all features (CSV)",
@@ -688,41 +624,6 @@ for each RNA–ligand complex you provide.
             file_name="RNALig_features_with_predictions.csv",
         )
 
-        # -----------------------------------------------------
-        # Feature patterns across complexes (numeric snapshot)
-        # -----------------------------------------------------
-        st.markdown("---")
-        st.subheader("Feature patterns across complexes")
-
-        num_cols = df_combined.select_dtypes(include=[np.number]).columns
-        # Remove ID-like numeric columns if any
-        num_cols = [c for c in num_cols if not ("id" in c.lower())]
-
-        if len(num_cols) > 0 and len(df_combined) > 1:
-            df_for_view = df_combined[num_cols].copy()
-            if df_for_view.shape[1] > 30:
-                df_for_view = df_for_view.iloc[:, :30]
-            if df_for_view.shape[0] > 40:
-                df_for_view = df_for_view.iloc[:40, :]
-            st.dataframe(
-                df_for_view,
-                use_container_width=True,
-            )
-            st.info(
-                "Above table shows a compact snapshot of numeric feature patterns "
-                "across complexes. For deeper analysis or custom plots, download "
-                "the CSV files above and explore in your preferred tool."
-            )
-        else:
-            st.info(
-                "At least 2 complexes and some numeric features are required "
-                "to show cross-complex patterns. Download CSVs above for "
-                "further analysis if needed."
-            )
-
-        # -----------------------------------------------------
-        # Per-complex views
-        # -----------------------------------------------------
         st.markdown("---")
         st.subheader("Per-complex feature & structure views")
 
@@ -741,8 +642,7 @@ for each RNA–ligand complex you provide.
             with st.expander(label, expanded=False):
                 show_feature_panel(row, cleaned_path=clean_path)
 
-    st.markdown("</div>", unsafe_allow_html=True)
-
+    st.markdown('</div>', unsafe_allow_html=True)
 
 def render_tutorial():
     st.markdown('<div class="content-card">', unsafe_allow_html=True)
@@ -758,10 +658,7 @@ def render_tutorial():
 ### 2. Run the pipeline
 
 1. Go to the **Run Predictions** page  
-2. Choose upload mode:  
-   - Fetch PDBs from RCSB (Option 1)  
-   - Upload individual PDB/mmCIF files (Option 2)  
-   - Upload a ZIP of many structures (Option 3)  
+2. Choose upload mode (individual files or ZIP)  
 3. Click **“Run full pipeline (features + prediction)”**  
 4. RNALig will:
    - Clean the complex  
@@ -775,18 +672,15 @@ def render_tutorial():
 - **Per-complex panels**:
   - Full feature vector (table)
   - Bar chart of numeric features
-  - 3D view of cleaned complex with ligand + pocket surface
+  - 3D view of cleaned complex (if available)
 
 > RNALig is a research tool. Predictions should be interpreted together with
 > structural inspection and experimental data where available.
         """
     )
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-
-# -------------------------------------------------------------------
-# Main
-# -------------------------------------------------------------------
+# -------------------- Main --------------------
 def main():
     # Sidebar navigation
     page = st.sidebar.radio(
@@ -805,9 +699,6 @@ def main():
         render_run_pipeline()
     else:
         render_tutorial()
-
-    # Footer
-    render_footer()
 
 
 if __name__ == "__main__":
