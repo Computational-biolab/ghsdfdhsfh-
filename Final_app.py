@@ -94,6 +94,15 @@ st.markdown(
         padding: 0.8rem 0.8rem 0.2rem 0.8rem;
         box-shadow: 0 4px 16px rgba(15, 23, 42, 0.10);
     }
+
+    /* Footer */
+    .footer-wrap {
+        margin-top: 1.5rem;
+        padding-top: 0.8rem;
+        border-top: 1px solid #e5e7eb;
+        font-size: 0.9rem;
+        color: #374151;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -405,21 +414,22 @@ def find_demo_pdbs() -> List[str]:
     demos.sort()
     return demos
 
-# -------------------- Header (logo + title, no tabs) --------------------
+# -------------------- Header (RNALig logo + title) --------------------
 def render_header():
     st.markdown('<div class="header-wrap">', unsafe_allow_html=True)
 
-    col_logo, col_text = st.columns([0.14, 0.86])
+    col_logo, col_text = st.columns([0.18, 0.82])
 
+    # RNALig logo (file name: logo.png / RNALig_logo.png / rnalig_logo.png)
     logo_path = None
-    for candidate in ["rnalig_logo.png", "RNALig_logo.png", "logo.png"]:
+    for candidate in ["logo.png", "RNALig_logo.png", "rnalig_logo.png"]:
         if os.path.exists(candidate):
             logo_path = candidate
             break
 
     with col_logo:
         if logo_path:
-            st.image(logo_path, use_column_width=True)
+            st.image(logo_path, width=130)
         else:
             st.write("RNALig")
 
@@ -434,6 +444,26 @@ def render_header():
             unsafe_allow_html=True,
         )
 
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# -------------------- Footer (Computational BioLab logo + text) --------------------
+def render_footer():
+    st.markdown('<div class="footer-wrap">', unsafe_allow_html=True)
+    col_logo, col_text = st.columns([0.2, 0.8])
+
+    with col_logo:
+        lab_logo = "Lab_Logo.png"
+        if os.path.exists(lab_logo):
+            st.image(lab_logo, width=110)
+
+    with col_text:
+        st.markdown("**Computational BioLab**")
+        st.markdown(
+            "Email: "
+            "[computationalbiolab@gmail.com]"
+            "(mailto:computationalbiolab@gmail.com)"
+        )
+        st.markdown("All rights reserved.")
     st.markdown("</div>", unsafe_allow_html=True)
 
 # -------------------- Page contents --------------------
@@ -699,6 +729,9 @@ def main():
         render_run_pipeline()
     else:
         render_tutorial()
+
+    # Footer (Computational BioLab)
+    render_footer()
 
 
 if __name__ == "__main__":
