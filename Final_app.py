@@ -28,7 +28,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# -------------------- Base CSS --------------------
+# -------------------- Base CSS (always light theme) --------------------
 BASE_CSS = """
 <style>
 .main {
@@ -87,40 +87,9 @@ p {
     padding: 0.8rem 0.8rem 0.2rem 0.8rem;
     box-shadow: 0 4px 16px rgba(15, 23, 42, 0.10);
 }
-.dark-background {
-    background-color: #0b1220;
-}
 </style>
 """
 st.markdown(BASE_CSS, unsafe_allow_html=True)
-
-
-def apply_theme(theme: str):
-    """Simple light/dark override."""
-    if theme == "Dark":
-        st.markdown(
-            """
-            <style>
-            .main {
-                background-color: #020617;
-                color: #e5e7eb;
-            }
-            .content-card, .header-wrap {
-                background-color: #020617;
-                color: #e5e7eb;
-                box-shadow: 0 8px 24px rgba(15, 23, 42, 0.80);
-                border: 1px solid #1f2937;
-            }
-            .header-title { color: #e5e7eb; }
-            .header-subtitle { color: #9ca3af; }
-            .stButton>button {
-                background-color: #1d4ed8 !important;
-                color: white !important;
-            }
-            </style>
-            """,
-            unsafe_allow_html=True,
-        )
 
 # -------------------- Model loading --------------------
 @st.cache_resource
@@ -414,11 +383,6 @@ def show_feature_panel(
     """
     Show per-complex features, numeric bar chart, ligand summary,
     and 3D view with ligand + pocket residues.
-
-    Parses Ligand_tag (e.g., 'AM2_A102' or 'AM2_A_102') to extract:
-      ligand_resn = 'AM2'
-      ligand_chain = 'A'
-      ligand_resi = '102'
     """
 
     pdb_id = row.get("PDB_ID", "Unknown")
@@ -525,7 +489,7 @@ def find_demo_pdbs() -> List[str]:
     demos.sort()
     return demos
 
-# -------------------- Header (logo + title, no tabs) --------------------
+# -------------------- Header (logo + title) --------------------
 def render_header():
     st.markdown('<div class="header-wrap">', unsafe_allow_html=True)
 
@@ -555,6 +519,39 @@ def render_header():
         )
 
     st.markdown("</div>", unsafe_allow_html=True)
+
+# -------------------- Footer with Computational BioLab --------------------
+def render_footer():
+    st.markdown(
+        "<hr style='margin-top:2.0rem;margin-bottom:0.8rem;'>",
+        unsafe_allow_html=True,
+    )
+
+    col_logo, col_text = st.columns([0.10, 0.90])
+
+    lab_logo = None
+    # Put your actual lab logo filename here (or a couple of options)
+    for candidate in [
+        "computationalbiolab_logo.png",
+        "CompBioLab_logo.png",
+        "NextGenComputationalBiologyLab.png",
+    ]:
+        if os.path.exists(candidate):
+            lab_logo = candidate
+            break
+
+    with col_logo:
+        if lab_logo:
+            st.image(lab_logo, use_column_width=True)
+
+    with col_text:
+        st.markdown(
+            """
+**Computational BioLab – NextGen Computational Biology Lab**  
+Department of Biosciences & Bioengineering  
+All rights reserved.
+            """
+        )
 
 # -------------------- Page contents --------------------
 def render_home_content():
@@ -944,10 +941,7 @@ def render_tutorial():
 
 # -------------------- Main --------------------
 def main():
-    # Sidebar navigation + theme
-    theme = st.sidebar.selectbox("Theme", ["Light", "Dark"], index=0)
-    apply_theme(theme)
-
+    # Sidebar navigation (no theme toggle now)
     page = st.sidebar.radio(
         "Navigation",
         ["Home", "Run Predictions", "Tutorial"],
@@ -964,6 +958,9 @@ def main():
         render_run_pipeline()
     else:
         render_tutorial()
+
+    # Footer (Computational BioLab)
+    render_footer()
 
 
 if __name__ == "__main__":
