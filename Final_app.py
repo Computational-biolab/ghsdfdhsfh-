@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import joblib
 import py3Dmol
+import requests  # for fetching PDBs from RCSB / NAKB
 
 # -------------------- Import your feature extractor --------------------
 try:
@@ -414,11 +415,39 @@ def find_demo_pdbs() -> List[str]:
     demos.sort()
     return demos
 
+# -------------------- Remote fetch helpers --------------------
+def fetch_pdb_file(pdb_id: str, source: str, out_dir: str) -> Optional[str]:
+    """
+    Fetch a PDB file from RCSB (and NAKB via RCSB mirror)
+    and save to out_dir. Returns local path or None.
+    """
+    pdb_id = pdb_id.strip().upper()
+    if not pdb_id:
+        return None
+
+    # Both RCSB and NA-KB structures are accessible via RCSB
+    url = f"https://files.rcsb.org/download/{pdb_id}.pdb"
+
+    try:
+        resp = requests.get(url, timeout=15)
+        if resp.status_code != 200:
+            st.warning(f"{pdb_id}: could not download (HTTP {resp.status_code}).")
+            return None
+    except Exception as e:
+        st.warning(f"{pdb_id}: download failed ({e}).")
+        return None
+
+    out_path = os.path.join(out_dir, f"{pdb_id}.pdb")
+    with open(out_path, "wb") as f:
+        f.write(resp.content)
+    return out_path
+
 # -------------------- Header (RNALig logo + title) --------------------
 def render_header():
     st.markdown('<div class="header-wrap">', unsafe_allow_html=True)
 
-    col_logo, col_text = st.columns([0.18, 0.82])
+    # Slightly bigger area for the logo
+    col_logo, col_text = st.columns([0.22, 0.78])
 
     # RNALig logo (file name: logo.png / RNALig_logo.png / rnalig_logo.png)
     logo_path = None
@@ -429,7 +458,8 @@ def render_header():
 
     with col_logo:
         if logo_path:
-            st.image(logo_path, width=130)
+            # Bigger logo
+            st.image(logo_path, width=170)
         else:
             st.write("RNALig")
 
@@ -449,12 +479,13 @@ def render_header():
 # -------------------- Footer (Computational BioLab logo + text) --------------------
 def render_footer():
     st.markdown('<div class="footer-wrap">', unsafe_allow_html=True)
-    col_logo, col_text = st.columns([0.2, 0.8])
+    # Bring logo & text closer together
+    col_logo, col_text = st.columns([0.15, 0.85])
 
     with col_logo:
         lab_logo = "Lab_Logo.png"
         if os.path.exists(lab_logo):
-            st.image(lab_logo, width=110)
+            st.image(lab_logo, width=95)
 
     with col_text:
         st.markdown("**Computational BioLab**")
@@ -489,8 +520,8 @@ def render_home_content():
         )
         st.markdown("")
         st.markdown(
-            "Use the **“Run Predictions”** page to upload your own complexes "
-            "and run the full pipeline."
+            "Use the **“Run Predictions”** page to upload or fetch your own "
+            "complexes and run the full pipeline."
         )
 
     with col_demo:
@@ -553,7 +584,7 @@ def render_run_pipeline():
     st.markdown(
         """
 This page performs the full **clean → feature extraction → prediction** workflow
-for each RNA–ligand complex you upload.
+for each RNA–ligand complex you upload or fetch.
         """
     )
 
@@ -562,14 +593,45 @@ for each RNA–ligand complex you upload.
     mode = st.radio(
         "Choose how to load structures:",
         (
-            "Option 1: Upload up to 5 PDB/mmCIF files",
-            "Option 2: Upload a ZIP with many PDB/mmCIF files",
+            "Option 1: Fetch PDB IDs from RCSB / NAKB",
+            "Option 2: Upload up to 5 PDB/mmCIF files",
+            "Option 3: Upload a ZIP with many PDB/mmCIF files",
         ),
     )
 
     pdb_paths: List[str] = []
 
+    # -------- Option 1: Fetch PDB IDs externally ----------
     if mode.startswith("Option 1"):
+        st.markdown("Enter one PDB ID per line (e.g. `4JF2`, `1ARJ`).")
+        pdb_text = st.text_area(
+            "PDB IDs",
+            value="4JF2\n1ARJ",
+            height=100,
+        )
+        source = st.radio(
+            "Fetch from:",
+            ["RCSB PDB", "NAKB (via RCSB mirror)"],
+            horizontal=True,
+        )
+
+        if pdb_text.strip():
+            tmp_in = tempfile.mkdtemp(prefix="rnalig_fetch_")
+            ids = [x.strip().upper() for x in pdb_text.splitlines() if x.strip()]
+            for pid in ids:
+                path = fetch_pdb_file(pid, source, tmp_in)
+                if path is not None:
+                    pdb_paths.append(path)
+
+            if pdb_paths:
+                st.success(f"Ready to process {len(pdb_paths)} downloaded structure(s).")
+            else:
+                st.warning("No structures could be downloaded. Please check the IDs.")
+        else:
+            st.info("Provide at least one PDB ID above.")
+
+    # -------- Option 2: Direct upload of a few structures ----------
+    elif mode.startswith("Option 2"):
         uploads = st.file_uploader(
             "Upload PDB/mmCIF files",
             type=["pdb", "cif", "mmcif"],
@@ -586,7 +648,8 @@ for each RNA–ligand complex you upload.
                     f.write(up.getbuffer())
                 pdb_paths.append(out_path)
 
-    else:  # ZIP mode
+    # -------- Option 3: ZIP upload ----------
+    else:
         zfile = st.file_uploader(
             "Upload a ZIP containing PDB/mmCIF files",
             type=["zip"],
@@ -612,7 +675,7 @@ for each RNA–ligand complex you upload.
 
     if st.button("Run full pipeline (features + prediction)", type="primary"):
         if not pdb_paths:
-            st.error("No structures to process. Please upload files or a ZIP first.")
+            st.error("No structures to process. Please upload/fetch files first.")
             st.markdown('</div>', unsafe_allow_html=True)
             return
 
@@ -688,7 +751,7 @@ def render_tutorial():
 ### 2. Run the pipeline
 
 1. Go to the **Run Predictions** page  
-2. Choose upload mode (individual files or ZIP)  
+2. Choose upload mode (fetch PDB IDs, individual files, or ZIP)  
 3. Click **“Run full pipeline (features + prediction)”**  
 4. RNALig will:
    - Clean the complex  
