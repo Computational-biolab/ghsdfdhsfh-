@@ -102,10 +102,6 @@ st.markdown(
         padding: 0.9rem 0.9rem 0.3rem 0.9rem;
         box-shadow: 0 4px 16px rgba(15, 23, 42, 0.10);
     }
-
-    .footer-logo {
-        max-height: 72px;
-    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -376,17 +372,22 @@ def render_header():
 
     col_logo, col_text = st.columns([0.16, 0.84])
 
-    # Try to find RNALig logo
-    logo_path = None
-    for fname in os.listdir("."):
-        low = fname.lower()
-        if low.startswith("rnalig") and low.endswith((".png", ".jpg", ".jpeg")):
-            logo_path = fname
+    # --- Find RNALig logo anywhere in the repo ---
+    rnalig_logo_path = None
+    for root, _, files in os.walk("."):
+        for fname in files:
+            low = fname.lower()
+            if "rnalig" in low and "logo" in low and low.endswith(
+                (".png", ".jpg", ".jpeg")
+            ):
+                rnalig_logo_path = os.path.join(root, fname)
+                break
+        if rnalig_logo_path:
             break
 
     with col_logo:
-        if logo_path:
-            st.image(logo_path, use_column_width=True)
+        if rnalig_logo_path:
+            st.image(rnalig_logo_path, width=130)
         else:
             st.markdown("**RNALig**")
 
@@ -432,7 +433,7 @@ def render_footer():
 
     with col_logo:
         if lab_logo_path:
-            st.image(lab_logo_path, use_column_width=True)
+            st.image(lab_logo_path, width=110)
         else:
             st.write("")
 
@@ -441,6 +442,7 @@ def render_footer():
             """
 **Computational BioLab**  
 Email: [computationalbiolab@gmail.com](mailto:computationalbiolab@gmail.com)  
+All rights reserved.
             """
         )
 
@@ -461,8 +463,8 @@ def render_home_content():
             "binding affinities directly from 3D complexes. It automatically "
             "cleans raw PDB/mmCIF files, standardises ligands and detects the "
             "RNA binding pocket. A rich set of structural and physicochemical "
-            "descriptors such as SASA, non-covalent contacts, hydrogen bonds, "
-            "stacking interactions and electrostatics, is extracted for each "
+            "descriptors—including SASA, non-covalent contacts, hydrogen bonds, "
+            "stacking interactions and electrostatics—is extracted for each "
             "complex. These features are fed into a trained Random Forest model "
             "to predict binding affinity in kcal/mol. The interface is designed "
             "as an end-to-end pipeline that exposes both the feature table and "
@@ -688,7 +690,9 @@ for each RNA–ligand complex you provide.
         if "Predicted_binding_affinity_kcal_mol" in df_pred.columns:
             best_val = df_pred["Predicted_binding_affinity_kcal_mol"].min()
             df_delta = df_pred.copy()
-            df_delta["ΔG_vs_best"] = (df_delta["Predicted_binding_affinity_kcal_mol"] - best_val).round(3)
+            df_delta["ΔG_vs_best"] = (
+                df_delta["Predicted_binding_affinity_kcal_mol"] - best_val
+            ).round(3)
             st.dataframe(df_delta, use_container_width=True)
 
         # ---------------- Downloads ----------------
@@ -717,8 +721,12 @@ for each RNA–ligand complex you provide.
             import seaborn as sns
             import matplotlib.pyplot as plt
 
-            fig, ax = plt.subplots(figsize=(min(10, 0.5 * num_df.shape[1] + 4),
-                                            min(8, 0.3 * len(num_df) + 3)))
+            fig, ax = plt.subplots(
+                figsize=(
+                    min(10, 0.5 * num_df.shape[1] + 4),
+                    min(8, 0.3 * len(num_df) + 3),
+                )
+            )
             sns.heatmap(num_df, cmap="viridis", ax=ax)
             ax.set_xlabel("Features")
             ax.set_ylabel("Complex index")
