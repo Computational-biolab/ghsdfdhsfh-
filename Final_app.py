@@ -1,11 +1,16 @@
-import streamlit as st
-import os, tempfile, zipfile, time
+import os
+import re
+import time
+import tempfile
+import zipfile
 from typing import List, Tuple, Optional
 
-import pandas as pd
-import numpy as np
+import requests
 import joblib
+import numpy as np
+import pandas as pd
 import py3Dmol
+import streamlit as st
 
 # -------------------- Import your feature extractor --------------------
 try:
@@ -459,7 +464,7 @@ def render_home_content():
         )
         st.markdown("")
         st.markdown(
-            "Use the **“Run Predictions”** page to upload your own complexes "
+            "Use the **“Run Predictions”** page to upload or fetch your own complexes "
             "and run the full pipeline."
         )
 
@@ -523,7 +528,7 @@ def render_run_pipeline():
     st.markdown(
         """
 This page performs the full **clean → feature extraction → prediction** workflow
-for each RNA–ligand complex you upload.
+for each RNA–ligand complex you upload or fetch.
         """
     )
 
@@ -532,14 +537,49 @@ for each RNA–ligand complex you upload.
     mode = st.radio(
         "Choose how to load structures:",
         (
-            "Option 1: Upload up to 5 PDB/mmCIF files",
-            "Option 2: Upload a ZIP with many PDB/mmCIF files",
+            "Option 1: Fetch PDBs from RCSB",
+            "Option 2: Upload up to 5 PDB/mmCIF files",
+            "Option 3: Upload a ZIP with many PDB/mmCIF files",
         ),
     )
 
     pdb_paths: List[str] = []
 
+    # ---------- Option 1: Fetch PDBs from RCSB ----------
     if mode.startswith("Option 1"):
+        pdb_text = st.text_input(
+            "Enter one or more PDB IDs (comma or space separated, e.g. 4JF2, 2G5K, 1ARJ):",
+            "",
+        )
+
+        if pdb_text.strip():
+            pdb_ids = [
+                x.strip().lower()
+                for x in re.split(r"[,\s]+", pdb_text)
+                if x.strip()
+            ]
+
+            if pdb_ids:
+                tmp_in = tempfile.mkdtemp(prefix="rnalig_fetch_")
+                for pid in pdb_ids:
+                    url = f"https://files.rcsb.org/download/{pid}.pdb"
+                    try:
+                        resp = requests.get(url, timeout=15)
+                        resp.raise_for_status()
+                    except Exception as e:
+                        st.warning(f"❌ Could not fetch {pid} from RCSB: {e}")
+                        continue
+
+                    out_path = os.path.join(tmp_in, f"{pid}.pdb")
+                    with open(out_path, "wb") as f:
+                        f.write(resp.content)
+                    pdb_paths.append(out_path)
+
+                if pdb_paths:
+                    st.success(f"✅ Fetched {len(pdb_paths)} PDB file(s) from RCSB.")
+
+    # ---------- Option 2: Upload up to 5 PDB/mmCIF ----------
+    elif mode.startswith("Option 2"):
         uploads = st.file_uploader(
             "Upload PDB/mmCIF files",
             type=["pdb", "cif", "mmcif"],
@@ -556,7 +596,8 @@ for each RNA–ligand complex you upload.
                     f.write(up.getbuffer())
                 pdb_paths.append(out_path)
 
-    else:  # ZIP mode
+    # ---------- Option 3: Upload ZIP ----------
+    else:  # mode.startswith("Option 3")
         zfile = st.file_uploader(
             "Upload a ZIP containing PDB/mmCIF files",
             type=["zip"],
@@ -580,9 +621,10 @@ for each RNA–ligand complex you upload.
             else:
                 st.error("No .pdb/.cif/.mmcif files found in the ZIP.")
 
+    # ---------- Run pipeline button ----------
     if st.button("Run full pipeline (features + prediction)", type="primary"):
         if not pdb_paths:
-            st.error("No structures to process. Please upload files or a ZIP first.")
+            st.error("No structures to process. Please fetch or upload files first.")
             st.markdown('</div>', unsafe_allow_html=True)
             return
 
@@ -658,7 +700,7 @@ def render_tutorial():
 ### 2. Run the pipeline
 
 1. Go to the **Run Predictions** page  
-2. Choose upload mode (individual files or ZIP)  
+2. Choose upload mode (fetch from RCSB, individual files, or ZIP)  
 3. Click **“Run full pipeline (features + prediction)”**  
 4. RNALig will:
    - Clean the complex  
@@ -672,7 +714,7 @@ def render_tutorial():
 - **Per-complex panels**:
   - Full feature vector (table)
   - Bar chart of numeric features
-  - 3D view of cleaned complex (if available)
+  - 3D view of cleaned complex with ligand & pocket highlighted
 
 > RNALig is a research tool. Predictions should be interpreted together with
 > structural inspection and experimental data where available.
