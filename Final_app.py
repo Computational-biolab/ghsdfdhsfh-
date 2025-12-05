@@ -190,6 +190,12 @@ def run_feature_extraction(pdb_paths: List[str]):
             cleaned_map[pdb_id] = clean_path
 
     df = pd.DataFrame(rows)
+
+    # Round all numeric (quantitative) features to 2 decimals
+    if not df.empty:
+        num_cols = df.select_dtypes(include=[np.number]).columns
+        df[num_cols] = df[num_cols].round(2)
+
     if "PDB_ID" in df.columns:
         cols = ["PDB_ID"] + [c for c in df.columns if c != "PDB_ID"]
         df = df[cols]
@@ -220,6 +226,7 @@ def predict_binding_affinity(df_features: pd.DataFrame):
 
     X = X.fillna(X.median())
     y_pred = model.predict(X)
+    y_pred = np.round(y_pred, 3)  # show predictions with 3 decimals
 
     if id_col is not None:
         df_pred = pd.DataFrame(
@@ -242,11 +249,15 @@ def show_3d_structure(
     height: int = 320,
     spin: bool = False,
     ligand_resn: Optional[str] = None,
+    ligand_chain: Optional[str] = None,
+    ligand_resi: Optional[str] = None,
 ):
     """
     Render a PDB string with py3Dmol.
 
-    ligand_resn: 3-letter residue name of the ligand (e.g. 'PRF').
+    ligand_resn  : 3-letter residue name of ligand (e.g. 'AM2')
+    ligand_chain : chain ID of ligand (e.g. 'A')
+    ligand_resi  : residue index of ligand (e.g. '102')
     """
     view = py3Dmol.view(width=width, height=height)
     view.addModel(pdb_str, "pdb")
@@ -254,14 +265,15 @@ def show_3d_structure(
     # Cartoon backbone coloured by spectrum
     view.setStyle({"cartoon": {"color": "spectrum"}})
 
-    # Highlight ligand as sticks + more focused surface for "pocket"
+    # --- Ligand + pocket highlighting ---
     if ligand_resn:
-        # ligand sticks
+        # Ligand sticks
         view.addStyle(
             {"resn": ligand_resn},
             {"stick": {"colorscheme": "magentaCarbon", "radius": 0.25}},
         )
-        # surface around ligand only
+
+        # Surface around ligand only (white pocket cavity)
         try:
             view.addSurface(
                 py3Dmol.VDW,
@@ -270,8 +282,33 @@ def show_3d_structure(
             )
         except Exception:
             pass
-    else:
-        # fallback: global soft surface
+
+    # Pocket residues (approx: ±2 residues around ligand in same chain)
+    if ligand_chain and ligand_resi:
+        try:
+            resi_int = int(ligand_resi)
+        except ValueError:
+            resi_int = None
+
+        if resi_int is not None:
+            pocket_resis = [str(r) for r in range(resi_int - 2, resi_int + 3)]
+            # Red sticks for pocket nucleotides
+            view.addStyle(
+                {"and": [{"chain": ligand_chain}, {"resi": pocket_resis}]},
+                {"stick": {"color": "red", "radius": 0.25}},
+            )
+            # Light red surface around pocket nucleotides
+            try:
+                view.addSurface(
+                    py3Dmol.VDW,
+                    {"opacity": 0.35, "color": "0xFFCCCC"},
+                    {"and": [{"chain": ligand_chain}, {"resi": pocket_resis}]},
+                )
+            except Exception:
+                pass
+
+    # Fallback: if no ligand info, show a soft global surface
+    if not ligand_resn and not (ligand_chain and ligand_resi):
         try:
             view.addSurface(py3Dmol.VDW, {"opacity": 0.35, "color": "white"})
         except Exception:
@@ -283,22 +320,40 @@ def show_3d_structure(
     html = view._make_html()
     st.components.v1.html(html, height=height + 15)
 
+
 def show_feature_panel(row: pd.Series, cleaned_path: Optional[str] = None):
     """
     Show per-complex features, numeric bar chart, and 3D view.
 
-    Also parses Ligand_tag (e.g., 'PRF_A101') to extract ligand residue name 'PRF'
-    for visualization.
+    Parses Ligand_tag (e.g., 'AM2_A102' or 'AM2_A_102') to extract:
+      ligand_resn = 'AM2'
+      ligand_chain = 'A'
+      ligand_resi = '102'
     """
     pdb_id = row.get("PDB_ID", "Unknown")
     pred = row.get("Predicted_binding_affinity_kcal_mol", None)
 
-    # Parse ligand name
+    # --- Parse ligand info from Ligand_tag ---
     ligand_resn = None
+    ligand_chain = None
+    ligand_resi = None
     ligand_tag = row.get("Ligand_tag", None)
-    if isinstance(ligand_tag, str) and len(ligand_tag) >= 3:
-        # Typically something like 'PRF_A101' -> residue name 'PRF'
-        ligand_resn = ligand_tag.split("_")[0][:3]
+
+    if isinstance(ligand_tag, str):
+        parts = ligand_tag.split("_")
+        # Common patterns: "AM2_A102"  or  "AM2_A_102"
+        if len(parts) == 2:
+            # 'AM2', 'A102'
+            ligand_resn = parts[0][:3]
+            rest = parts[1]
+            if len(rest) >= 2:
+                ligand_chain = rest[0]
+                ligand_resi = rest[1:]
+        elif len(parts) >= 3:
+            # 'AM2', 'A', '102'
+            ligand_resn = parts[0][:3]
+            ligand_chain = parts[1][0] if parts[1] else None
+            ligand_resi = parts[2]
 
     st.markdown(f"### 🧾 {pdb_id}")
     if pred is not None:
@@ -311,9 +366,9 @@ def show_feature_panel(row: pd.Series, cleaned_path: Optional[str] = None):
         df_single = row.to_frame(name="Value")
         st.dataframe(df_single, use_container_width=True)
 
-        # Numeric features for bar chart:
-        # convert everything that can be numeric, drop non-numeric
+        # Numeric features for bar chart (coerce to numeric, 2 decimals)
         numeric_series = row.apply(lambda x: pd.to_numeric(x, errors="coerce")).dropna()
+        numeric_series = numeric_series.round(2)
         if not numeric_series.empty:
             st.markdown("**Numeric features (bar chart)**")
             st.bar_chart(numeric_series)
@@ -332,6 +387,8 @@ def show_feature_panel(row: pd.Series, cleaned_path: Optional[str] = None):
                     height=260,
                     spin=False,
                     ligand_resn=ligand_resn,
+                    ligand_chain=ligand_chain,
+                    ligand_resi=ligand_resi,
                 )
             except Exception as e:
                 st.warning(f"Could not render cleaned PDB: {e}")
@@ -425,14 +482,14 @@ def render_home_content():
                 except Exception:
                     continue
                 with placeholder.container():
-                    show_3d_structure(pdb_block, spin=True, ligand_resn=None)
+                    show_3d_structure(pdb_block, spin=True)
                 time.sleep(1.0)
 
             try:
                 with open(demo_files[-1], "r") as f:
                     pdb_last = f.read()
                 with placeholder.container():
-                    show_3d_structure(pdb_last, spin=True, ligand_resn=None)
+                    show_3d_structure(pdb_last, spin=True)
             except Exception:
                 pass
 
