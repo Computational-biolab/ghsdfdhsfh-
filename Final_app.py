@@ -112,10 +112,10 @@ def load_model_bundle() -> Tuple[Optional[object], Optional[List[str]]]:
         with open("RNALig_training_model.pkl", "rb") as f:
             bundle = joblib.load(f)
     except FileNotFoundError:
-        st.error(" Model file `RNALig_training_model.pkl` not found in this folder.")
+        st.error("Model file `RNALig_training_model.pkl` not found in this folder.")
         return None, None
     except Exception as e:
-        st.error(f" Failed to load model bundle: {e}")
+        st.error(f"Failed to load model bundle: {e}")
         return None, None
 
     if isinstance(bundle, dict) and "model" in bundle:
@@ -150,7 +150,7 @@ def build_default_args(outdir: str):
     args.elec_dmax = 10.0
     args.elec_include_negative = False
 
-    # visualization flags
+    # visualization flags (kept False; visualization uses cleaned PDB)
     args.viz_rna = False
     args.viz_ligand = False
     args.viz_complex = False
@@ -240,8 +240,20 @@ def show_3d_structure(pdb_str: str, width: int = 430, height: int = 320, spin: b
     """Render a PDB string with py3Dmol."""
     view = py3Dmol.view(width=width, height=height)
     view.addModel(pdb_str, "pdb")
+
+    # Cartoon backbone coloured by spectrum
     view.setStyle({"cartoon": {"color": "spectrum"}})
+
+    # Ligand sticks (guesses ligand as "LIG"; adjust if needed)
     view.addStyle({"and": [{"resn": "LIG"}]}, {"stick": {"colorscheme": "cyanCarbon"}})
+
+    # Add a translucent surface over everything to give a pocket-like feel
+    try:
+        view.addSurface(py3Dmol.VDW, {"opacity": 0.35, "color": "white"})
+    except Exception:
+        # If surface fails for some weird structure, just ignore
+        pass
+
     view.zoomTo()
     if spin:
         view.spin(True)
@@ -249,6 +261,7 @@ def show_3d_structure(pdb_str: str, width: int = 430, height: int = 320, spin: b
     st.components.v1.html(html, height=height + 15)
 
 def show_feature_panel(row: pd.Series, cleaned_path: Optional[str] = None):
+    """Show per-complex features, numeric bar chart, and 3D view."""
     pdb_id = row.get("PDB_ID", "Unknown")
     pred = row.get("Predicted_binding_affinity_kcal_mol", None)
 
@@ -263,10 +276,15 @@ def show_feature_panel(row: pd.Series, cleaned_path: Optional[str] = None):
         df_single = row.to_frame(name="Value")
         st.dataframe(df_single, use_container_width=True)
 
-        num_series = row.select_dtypes(include=[np.number])
-        if len(num_series) > 0:
+        # Safely select numeric features for bar chart
+        df_row = row.to_frame().T              # 1-row DataFrame
+        df_num = df_row.select_dtypes(include=[np.number])
+        if not df_num.empty:
+            num_series = df_num.iloc[0]        # back to Series
             st.markdown("**Numeric features (bar chart)**")
             st.bar_chart(num_series)
+        else:
+            st.info("No numeric features available for bar chart.")
 
     with col_right:
         if cleaned_path is not None:
@@ -344,7 +362,7 @@ def render_home_content():
         )
         st.markdown("")
         st.markdown(
-            " Use the **“Run Predictions”** page to upload your own complexes "
+            "Use the **“Run Predictions”** page to upload your own complexes "
             "and run the full pipeline."
         )
 
@@ -465,7 +483,7 @@ for each RNA–ligand complex you upload.
             else:
                 st.error("No .pdb/.cif/.mmcif files found in the ZIP.")
 
-    if st.button(" Run full pipeline (features + prediction)", type="primary"):
+    if st.button("Run full pipeline (features + prediction)", type="primary"):
         if not pdb_paths:
             st.error("No structures to process. Please upload files or a ZIP first.")
             st.markdown('</div>', unsafe_allow_html=True)
@@ -475,16 +493,16 @@ for each RNA–ligand complex you upload.
             try:
                 df_features, cleaned_map = run_feature_extraction(pdb_paths)
             except Exception as e:
-                st.error(f" Feature extraction failed: {e}")
+                st.error(f"Feature extraction failed: {e}")
                 st.markdown('</div>', unsafe_allow_html=True)
                 return
 
-        st.success(f" Extracted features for {len(df_features)} structure(s).")
+        st.success(f"Extracted features for {len(df_features)} structure(s).")
 
         with st.spinner("Predicting binding affinities..."):
             df_pred, df_combined = predict_binding_affinity(df_features)
         if df_pred is None:
-            st.error(" Prediction step failed due to model issues.")
+            st.error("Prediction step failed due to model issues.")
             st.markdown('</div>', unsafe_allow_html=True)
             return
 
@@ -492,7 +510,7 @@ for each RNA–ligand complex you upload.
         st.markdown("**All predictions**")
         st.dataframe(df_pred, use_container_width=True)
 
-        st.markdown("####  Download results")
+        st.markdown("#### Download results")
         st.download_button(
             "Download all features (CSV)",
             data=df_features.to_csv(index=False).encode("utf-8"),
@@ -518,11 +536,11 @@ for each RNA–ligand complex you upload.
             if id_col:
                 pdb_id = row[id_col]
                 clean_path = cleaned_map.get(pdb_id)
-                label = f" {pdb_id}"
+                label = f"{pdb_id}"
             else:
                 pdb_id = f"row_{idx}"
                 clean_path = None
-                label = f" Complex {idx}"
+                label = f"Complex {idx}"
 
             with st.expander(label, expanded=False):
                 show_feature_panel(row, cleaned_path=clean_path)
