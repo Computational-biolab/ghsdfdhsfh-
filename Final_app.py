@@ -752,7 +752,7 @@ def render_tutorial():
 
 1. Go to the **Run Predictions** page  
 2. Choose upload mode (fetch PDB IDs, individual files, or ZIP)  
-3. Click **“Run full pipeline (features + prediction)”**  
+3. Click **“Run pipeline”**  
 4. RNALig will:
    - Clean the complex  
    - Detect the ligand pocket  
