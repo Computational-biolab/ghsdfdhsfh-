@@ -365,7 +365,7 @@ def show_feature_panel(row: pd.Series, cleaned_path: Optional[str] = None):
             ligand_chain = parts[1][0] if parts[1] else None
             ligand_resi = parts[2]
 
-    st.markdown(f"### 🧾 {pdb_id}")
+    st.markdown(f"###  {pdb_id}")
     if pred is not None:
         st.markdown(f"**Predicted binding affinity:** `{pred:.3f} kcal/mol`")
 
@@ -501,7 +501,7 @@ def render_footer():
 def render_home_content():
     st.markdown('<div class="content-card">', unsafe_allow_html=True)
 
-    st.markdown("### Overview")
+    st.markdown("### Welcome to Home Page of RNALig")
     col_text, col_demo = st.columns([2, 1.4])
 
     with col_text:
