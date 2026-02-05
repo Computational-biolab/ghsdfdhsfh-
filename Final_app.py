@@ -673,7 +673,7 @@ for each RNA–ligand complex you upload or fetch.
             else:
                 st.error("No .pdb/.cif/.mmcif files found in the ZIP.")
 
-    if st.button("Run full pipeline (features + prediction)", type="primary"):
+    if st.button("Run pipeline", type="primary"):
         if not pdb_paths:
             st.error("No structures to process. Please upload/fetch files first.")
             st.markdown('</div>', unsafe_allow_html=True)
