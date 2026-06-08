@@ -468,7 +468,7 @@ def render_header():
             """
             <div class="header-title">RNALig – RNA–Ligand Binding Affinity Predictor</div>
             <div class="header-subtitle">
-                AI-driven scoring & interpretability for RNA–ligand complexes
+                ML-driven scoring & interpretability for RNA–ligand complexes
             </div>
             """,
             unsafe_allow_html=True,
