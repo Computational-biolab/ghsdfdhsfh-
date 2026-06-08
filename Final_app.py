@@ -8,6 +8,17 @@ import joblib
 import py3Dmol
 import requests  # for fetching PDBs from RCSB / NAKB
 
+st.set_page_config(layout="wide")
+
+st.markdown("""
+<style>
+#MainMenu {visibility:hidden;}
+footer {visibility:hidden;}
+header {visibility:hidden;}
+[data-testid="stToolbar"] {display:none;}
+</style>
+""", unsafe_allow_html=True)
+
 # -------------------- Import your feature extractor --------------------
 try:
     import Features_RNALig as FR
