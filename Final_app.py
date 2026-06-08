@@ -506,7 +506,7 @@ def render_home_content():
 
     with col_text:
         st.write(
-            "RNALig is an AI-driven scoring function that estimates RNA–ligand "
+            "RNALig is an ML-driven scoring function that estimates RNA–ligand "
             "binding affinities directly from 3D complexes. It automatically "
             "cleans raw PDB/mmCIF files, standardises ligands and detects the "
             "RNA binding pocket. A rich set of structural and physicochemical "
